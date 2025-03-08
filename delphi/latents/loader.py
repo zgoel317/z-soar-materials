@@ -7,7 +7,7 @@ from typing import Optional
 
 import numpy as np
 import torch
-from jaxtyping import Float
+from jaxtyping import Int, Float
 from safetensors.numpy import load_file
 from torch import Tensor
 from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
@@ -34,10 +34,10 @@ class TensorBuffer:
     module_path: str
     """Path of the module."""
 
-    latents: Optional[Float[Tensor, "num_latents"]] = None
+    latents: Optional[Int[Tensor, "num_latents"]] = None
     """Tensor of latent indices."""
 
-    _tokens: Optional[Float[Tensor, "batch seq"]] = None
+    _tokens: Optional[Int[Tensor, "batch seq"]] = None
     """Tensor of tokens."""
 
     def __iter__(self):
@@ -60,7 +60,7 @@ class TensorBuffer:
             )
 
     @property
-    def tokens(self) -> Float[Tensor, "batch seq"] | None:
+    def tokens(self) -> Int[Tensor, "batch seq"] | None:
         if self._tokens is None:
             self._tokens = self.load_tokens()
         return self._tokens
@@ -82,10 +82,15 @@ class TensorBuffer:
     def load(
         self,
     ) -> tuple[
-        Float[Tensor, "locations 2"],
+        Int[Tensor, "locations 3"],
         Float[Tensor, "activations"],
-        Float[Tensor, "batch seq"] | None,
+        Int[Tensor, "batch seq"] | None,
     ]:
+        """Load stored tensor buffer data.
+
+        Returns:
+            Tuple[Tensor, Tensor, Optional[Tensor]]: Locations, activations, and tokens.
+        """
         split_data = load_file(self.path)
         first_latent = int(self.path.split("/")[-1].split("_")[0])
         activations = torch.tensor(split_data["activations"])
@@ -104,7 +109,7 @@ class TensorBuffer:
 
         return locations, activations, tokens
 
-    def load_tokens(self) -> Float[Tensor, "batch seq"] | None:
+    def load_tokens(self) -> Int[Tensor, "batch seq"] | None:
         _, _, tokens = self.load()
         return tokens
 

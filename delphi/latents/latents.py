@@ -3,7 +3,7 @@ from typing import NamedTuple, Optional
 
 import blobfile as bf
 import orjson
-from jaxtyping import Float
+from jaxtyping import Float, Int
 from torch import Tensor
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 
@@ -35,7 +35,7 @@ class ActivationData(NamedTuple):
     Represents the activation data for a latent.
     """
 
-    locations: Float[Tensor, "n_examples 2"]
+    locations: Int[Tensor, "n_examples 3"]
     """Tensor of latent locations."""
 
     activations: Float[Tensor, "n_examples"]

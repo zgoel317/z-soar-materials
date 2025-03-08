@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-beartype", "pytest-asyncio"]
+dev = ["pytest", "pytest-beartype", "pytest-asyncio", "setuptools"]
 visualize = [
     "kaleido==0.2.1",
     "plotly>=5.0.0rc2",

@@ -4,6 +4,9 @@ from pathlib import Path
 
 import torch
 
+from beartype.claw import beartype_package
+beartype_package("delphi")
+
 from delphi.__main__ import run
 from delphi.config import CacheConfig, ConstructorConfig, RunConfig, SamplerConfig
 from delphi.log.result_analysis import build_scores_df, latent_balanced_score_metrics

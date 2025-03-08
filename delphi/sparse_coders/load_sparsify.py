@@ -6,9 +6,14 @@ import torch
 from sparsify import SparseCoder
 from torch import Tensor
 from transformers import PreTrainedModel
+from typing import TypeVar, Union
+import torch._dynamo.eval_frame
+
+T = TypeVar('T')
+PotentiallyWrapped = Union[T, torch._dynamo.eval_frame.OptimizedModule]
 
 
-def sae_dense_latents(x: Tensor, sae: SparseCoder) -> Tensor:
+def sae_dense_latents(x: Tensor, sae: PotentiallyWrapped[SparseCoder]) -> Tensor:
     """Run `sae` on `x`, yielding the dense activations."""
     pre_acts = sae.pre_acts(x)
     acts, indices = sae.select_topk(pre_acts)
@@ -47,7 +52,7 @@ def load_sparsify_sparse_coders(
     hookpoints: list[str],
     device: str | torch.device,
     compile: bool = False,
-) -> dict[str, SparseCoder]:
+) -> dict[str, PotentiallyWrapped[SparseCoder]]:
     """
     Load sparsify sparse coders for specified hookpoints.
 
