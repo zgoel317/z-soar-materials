@@ -69,7 +69,7 @@ class Example:
     A single example of latent data.
     """
 
-    tokens: Float[Tensor, "ctx_len"]
+    tokens: Int[Tensor, "ctx_len"]
     """Tokenized input sequence."""
 
     activations: Float[Tensor, "ctx_len"]
