@@ -1,11 +1,11 @@
 import json
 from collections import defaultdict
 from pathlib import Path
-from typing import Callable
+from collections.abc import Callable
 
 import numpy as np
 import torch
-from jaxtyping import Float
+from jaxtyping import Float, Int
 from safetensors.numpy import save_file
 from torch import Tensor
 from tqdm import tqdm
@@ -14,8 +14,10 @@ from transformers import PreTrainedModel
 from delphi.config import CacheConfig
 from delphi.latents.collect_activations import collect_activations
 
-location_tensor_shape = Float[Tensor, "batch sequence num_latents"]
-token_tensor_shape = Float[Tensor, "batch sequence"]
+location_tensor_type = Int[Tensor, "batch_sequence 3"]
+activation_tensor_type = Float[Tensor, "batch_sequence"]
+token_tensor_type = Int[Tensor, "batch sequence"]
+latent_tensor_type = Float[Tensor, "batch sequence num_latents"]
 
 
 class Cache:
@@ -36,25 +38,25 @@ class Cache:
             filters: Filters for selecting specific latents.
             batch_size: Size of batches for processing. Defaults to 64.
         """
-        self.latent_locations_batches: dict[str, list[location_tensor_shape]] = (
+        self.latent_locations_batches: dict[str, list[location_tensor_type]] = (
             defaultdict(list)
         )
-        self.latent_activations_batches: dict[str, list[location_tensor_shape]] = (
+        self.latent_activations_batches: dict[str, list[latent_tensor_type]] = (
             defaultdict(list)
         )
-        self.tokens_batches: dict[str, list[token_tensor_shape]] = defaultdict(list)
+        self.tokens_batches: dict[str, list[token_tensor_type]] = defaultdict(list)
 
-        self.latent_locations: dict[str, location_tensor_shape] = {}
-        self.latent_activations: dict[str, location_tensor_shape] = {}
-        self.tokens: dict[str, token_tensor_shape] = {}
+        self.latent_locations: dict[str, location_tensor_type] = {}
+        self.latent_activations: dict[str, latent_tensor_type] = {}
+        self.tokens: dict[str, token_tensor_type] = {}
 
         self.filters = filters
         self.batch_size = batch_size
 
     def add(
         self,
-        latents: location_tensor_shape,
-        tokens: token_tensor_shape,
+        latents: latent_tensor_type,
+        tokens: token_tensor_type,
         batch_number: int,
         module_path: str,
     ):
@@ -96,7 +98,7 @@ class Cache:
             )
 
     def get_nonzeros_batch(
-        self, latents: location_tensor_shape
+        self, latents: latent_tensor_type
     ) -> tuple[
         Float[Tensor, "batch sequence num_latents"], Float[Tensor, "batch sequence "]
     ]:
@@ -133,9 +135,9 @@ class Cache:
         nonzero_latent_activations = torch.cat(nonzero_latent_activations, dim=0)
         return nonzero_latent_locations, nonzero_latent_activations
 
-    def get_nonzeros(self, latents: location_tensor_shape, module_path: str) -> tuple[
-        location_tensor_shape,
-        location_tensor_shape,
+    def get_nonzeros(self, latents: latent_tensor_type, module_path: str) -> tuple[
+        location_tensor_type,
+        activation_tensor_type,
     ]:
         """
         Get the nonzero latent locations and activations.
@@ -202,8 +204,8 @@ class LatentCache:
             self.filter_submodules(filters)
 
     def load_token_batches(
-        self, n_tokens: int, tokens: token_tensor_shape
-    ) -> list[token_tensor_shape]:
+        self, n_tokens: int, tokens: token_tensor_type
+    ) -> list[token_tensor_type]:
         """
         Load and prepare token batches for processing.
 
@@ -239,7 +241,7 @@ class LatentCache:
                 filtered_submodules[hookpoint] = self.hookpoint_to_sae[hookpoint]
         self.hookpoint_to_sae = filtered_submodules
 
-    def run(self, n_tokens: int, tokens: token_tensor_shape):
+    def run(self, n_tokens: int, tokens: token_tensor_type):
         """
         Run the latent caching process.
 
