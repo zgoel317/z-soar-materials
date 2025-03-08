@@ -3,6 +3,7 @@ import json
 import random
 import re
 from abc import abstractmethod
+from typing import Literal
 
 import numpy as np
 
@@ -136,7 +137,7 @@ class Classifier(Scorer):
         match = re.search(pattern, string)
         if match is None:
             raise ValueError("No match found in string")
-        predictions: list[bool] = json.loads(match.group(0))
+        predictions: list[bool | Literal[0, 1]] = json.loads(match.group(0))
         assert len(predictions) == self.n_examples_shown
         probabilities = (
             self._parse_logprobs(logprobs)
