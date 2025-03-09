@@ -20,6 +20,45 @@ token_tensor_type = Int[Tensor, "batch sequence"]
 latent_tensor_type = Float[Tensor, "batch sequence num_latents"]
 
 
+def get_nonzeros_batch(
+    latents: latent_tensor_type
+) -> tuple[
+    Float[Tensor, "batch sequence num_latents"], Float[Tensor, "batch sequence "]
+]:
+    """
+    Get non-zero activations for large batches that exceed int32 max value.
+
+    Args:
+        latents: Input latent activations.
+
+    Returns:
+        tuple[Tensor, Tensor]: Non-zero latent locations and activations.
+    """
+    # Calculate the maximum batch size that fits within sys.maxsize
+    max_batch_size = torch.iinfo(torch.int32).max // (
+        latents.shape[1] * latents.shape[2]
+    )
+    nonzero_latent_locations = []
+    nonzero_latent_activations = []
+
+    for i in range(0, latents.shape[0], max_batch_size):
+        batch = latents[i : i + max_batch_size]
+
+        # Get nonzero locations and activations
+        batch_locations = torch.nonzero(batch.abs() > 1e-5)
+        batch_activations = batch[batch.abs() > 1e-5]
+
+        # Adjust indices to account for batching
+        batch_locations[:, 0] += i
+        nonzero_latent_locations.append(batch_locations)
+        nonzero_latent_activations.append(batch_activations)
+
+    # Concatenate results
+    nonzero_latent_locations = torch.cat(nonzero_latent_locations, dim=0)
+    nonzero_latent_activations = torch.cat(nonzero_latent_activations, dim=0)
+    return nonzero_latent_locations, nonzero_latent_activations
+
+
 class Cache:
     """
     The Cache class stores latent locations and activations for modules.
@@ -97,44 +136,6 @@ class Cache:
                 self.tokens_batches[module_path], dim=0
             )
 
-    def get_nonzeros_batch(
-        self, latents: latent_tensor_type
-    ) -> tuple[
-        Float[Tensor, "batch sequence num_latents"], Float[Tensor, "batch sequence "]
-    ]:
-        """
-        Get non-zero activations for large batches that exceed int32 max value.
-
-        Args:
-            latents: Input latent activations.
-
-        Returns:
-            tuple[Tensor, Tensor]: Non-zero latent locations and activations.
-        """
-        # Calculate the maximum batch size that fits within sys.maxsize
-        max_batch_size = torch.iinfo(torch.int32).max // (
-            latents.shape[1] * latents.shape[2]
-        )
-        nonzero_latent_locations = []
-        nonzero_latent_activations = []
-
-        for i in range(0, latents.shape[0], max_batch_size):
-            batch = latents[i : i + max_batch_size]
-
-            # Get nonzero locations and activations
-            batch_locations = torch.nonzero(batch.abs() > 1e-5)
-            batch_activations = batch[batch.abs() > 1e-5]
-
-            # Adjust indices to account for batching
-            batch_locations[:, 0] += i
-            nonzero_latent_locations.append(batch_locations)
-            nonzero_latent_activations.append(batch_activations)
-
-        # Concatenate results
-        nonzero_latent_locations = torch.cat(nonzero_latent_locations, dim=0)
-        nonzero_latent_activations = torch.cat(nonzero_latent_activations, dim=0)
-        return nonzero_latent_locations, nonzero_latent_activations
-
     def get_nonzeros(self, latents: latent_tensor_type, module_path: str) -> tuple[
         location_tensor_type,
         activation_tensor_type,
@@ -154,7 +155,7 @@ class Cache:
             (
                 nonzero_latent_locations,
                 nonzero_latent_activations,
-            ) = self.get_nonzeros_batch(latents)
+            ) = get_nonzeros_batch(latents)
         else:
             nonzero_latent_locations = torch.nonzero(latents.abs() > 1e-5)
             nonzero_latent_activations = latents[latents.abs() > 1e-5]

@@ -48,7 +48,7 @@ def _top_k_pools(
     Get the top k activation pools.
 
     Args:
-        max_buffer: The maximum buffer values.
+        max_buffer: The maxima of each context window's activations.
         split_activations: The split activations.
         buffer_tokens: The buffer tokens.
         max_examples: The maximum number of examples.
