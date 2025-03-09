@@ -183,6 +183,7 @@ async def test(
 
     print("All tests passed!")
     if explainer_provider == "offline":
+        assert isinstance(client, Offline)
         await client.close()
 
 

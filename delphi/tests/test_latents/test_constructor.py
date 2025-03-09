@@ -123,7 +123,7 @@ def test_simple_cache(
         assert example.normalized_activations.shape == example.activations.shape
         assert (example.normalized_activations <= 10).all()
         assert (example.normalized_activations >= 0).all()
-    for quantile_list in (record.test,) + (
+    for quantile_list in (record.test,) + (  # type: ignore
         (record.train,) if train_type == "quantiles" else ()
     ):
         quantile_list: list[ActivatingExample] = quantile_list

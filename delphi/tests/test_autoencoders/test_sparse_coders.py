@@ -19,7 +19,7 @@ class DummyRunConfig:
         self.hf_token = ""
 
     @property
-    def __class__(self) -> type:
+    def __class__(self) -> type:  # type: ignore
         return RunConfig
 
 
@@ -46,7 +46,7 @@ class DummyModel(nn.Module):
         return x
 
     @property
-    def __class__(self) -> type:
+    def __class__(self) -> type:  # type: ignore
         return PreTrainedModel
 
 
