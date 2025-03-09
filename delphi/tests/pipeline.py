@@ -45,8 +45,12 @@ TEST_LOADERS = [
 ]
 
 
+def identity(x):
+    return x
+
+
 def test_process_wrapper_not_async():
-    not_async_fn = lambda x: x
+    not_async_fn = identity
     wrapped_fn = process_wrapper(not_async_fn)
     with pytest.warns(RuntimeWarning):
         assert isinstance(wrapped_fn(1), Awaitable)
@@ -55,7 +59,7 @@ def test_process_wrapper_not_async():
 @pytest.mark.xfail
 @pytest.mark.asyncio
 async def test_async_fails():
-    not_async_fn = lambda x: x
+    not_async_fn = identity
     wrapped_fn = process_wrapper(not_async_fn)
     assert await wrapped_fn(1) == 1
 

@@ -12,18 +12,18 @@ from transformers import AutoTokenizer
 
 beartype_package("delphi")
 
-from delphi.clients import Client, Offline, OpenRouter
-from delphi.clients.types import Message
-from delphi.explainers import DefaultExplainer
-from delphi.latents.latents import (
+from delphi.clients import Client, Offline, OpenRouter  # noqa: E402
+from delphi.clients.types import Message  # noqa: E402
+from delphi.explainers import DefaultExplainer  # noqa: E402
+from delphi.latents.latents import (  # noqa: E402
     ActivatingExample,
     Latent,
     LatentRecord,
     NonActivatingExample,
 )
-from delphi.latents.samplers import SamplerConfig, sampler
-from delphi.logger import logger
-from delphi.scorers import DetectionScorer, FuzzingScorer
+from delphi.latents.samplers import SamplerConfig, sampler  # noqa: E402
+from delphi.logger import logger  # noqa: E402
+from delphi.scorers import DetectionScorer, FuzzingScorer  # noqa: E402
 
 logger.addHandler(logging.StreamHandler())
 

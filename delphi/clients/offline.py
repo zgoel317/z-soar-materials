@@ -146,7 +146,10 @@ class Offline(Client):
             )
         return new_response
 
-    async def generate(self, prompt: Union[str, list[dict[str, str]]], **kwargs) -> Response:  # type: ignore
+    async def generate(self,
+                       prompt: Union[str, list[dict[str, str]]],
+                       **kwargs
+        ) -> Response:  # type: ignore
         """
         Enqueue a request and wait for the result.
         """
