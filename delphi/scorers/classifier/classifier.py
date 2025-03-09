@@ -4,6 +4,7 @@ import random
 import re
 from abc import abstractmethod
 from typing import Literal
+import traceback
 
 import numpy as np
 
@@ -106,7 +107,7 @@ class Classifier(Scorer):
             try:
                 predictions, probabilities = self._parse(selections, logprobs)
             except Exception as e:
-                logger.error(f"Parsing selections failed: {e}")
+                logger.error(f"Parsing selections failed:\n" + traceback.format_exc())
                 predictions = [None] * self.n_examples_shown
                 probabilities = [None] * self.n_examples_shown
 
