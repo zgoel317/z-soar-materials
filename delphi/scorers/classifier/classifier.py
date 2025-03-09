@@ -2,9 +2,9 @@ import asyncio
 import json
 import random
 import re
+import traceback
 from abc import abstractmethod
 from typing import Literal
-import traceback
 
 import numpy as np
 
@@ -106,8 +106,8 @@ class Classifier(Scorer):
             logprobs = response.logprobs if self.log_prob else None
             try:
                 predictions, probabilities = self._parse(selections, logprobs)
-            except Exception as e:
-                logger.error(f"Parsing selections failed:\n" + traceback.format_exc())
+            except Exception:
+                logger.error("Parsing selections failed:\n" + traceback.format_exc())
                 predictions = [None] * self.n_examples_shown
                 probabilities = [None] * self.n_examples_shown
 

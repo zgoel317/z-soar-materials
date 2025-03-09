@@ -1,27 +1,30 @@
-import asyncio
-import fire
-import os
-import time
-import dotenv
-from typing import Literal
-from pathlib import Path
 import logging
+import os
+from typing import Literal
 
+import dotenv
+import fire
 import torch
+from beartype.claw import beartype_package
 from jaxtyping import Int
 from torch import Tensor
 from transformers import AutoTokenizer
-from beartype.claw import beartype_package
 
 beartype_package("delphi")
 
 from delphi.clients import Client, Offline, OpenRouter
 from delphi.clients.types import Message
 from delphi.explainers import DefaultExplainer
-from delphi.scorers import FuzzingScorer, DetectionScorer
-from delphi.latents.latents import LatentRecord, Latent, ActivatingExample, NonActivatingExample
-from delphi.latents.samplers import sampler, SamplerConfig
+from delphi.latents.latents import (
+    ActivatingExample,
+    Latent,
+    LatentRecord,
+    NonActivatingExample,
+)
+from delphi.latents.samplers import SamplerConfig, sampler
 from delphi.logger import logger
+from delphi.scorers import DetectionScorer, FuzzingScorer
+
 logger.addHandler(logging.StreamHandler())
 
 
@@ -39,11 +42,11 @@ async def test(
         elif scorer_type == "detect":
             return DetectionScorer(client, verbose=True)
         # other cases impossible due to beartype
-    
+
     print("Creating data")
-    
+
     tokenizer = AutoTokenizer.from_pretrained("EleutherAI/pythia-160m")
-    
+
     texts_activating = [
         "I like dogs. Dogs are great.",
         "Dog dog dog dog dog dog",
@@ -55,50 +58,68 @@ async def test(
     explanation = "Sentences mentioning dogs."
     activating_examples = []
     for text in texts_activating:
-        token_ids: Int[Tensor, "ctx_len"] = tokenizer(text, return_tensors="pt")["input_ids"][0]
-        dog_tokens = tokenizer("Dog dog Dog dogs Dogs", return_tensors="pt")["input_ids"][0]
-        activating_examples.append(ActivatingExample(
-            tokens=token_ids,
-            activations=(token_ids[:, None] == dog_tokens[None, :]).any(dim=1).float(),
-            str_tokens=tokenizer.batch_decode(token_ids, skip_special_tokens=True)
-        ))
+        token_ids: Int[Tensor, "ctx_len"] = tokenizer(text, return_tensors="pt")[
+            "input_ids"
+        ][0]
+        dog_tokens = tokenizer("Dog dog Dog dogs Dogs", return_tensors="pt")[
+            "input_ids"
+        ][0]
+        activating_examples.append(
+            ActivatingExample(
+                tokens=token_ids,
+                activations=(token_ids[:, None] == dog_tokens[None, :])
+                .any(dim=1)
+                .float(),
+                str_tokens=tokenizer.batch_decode(token_ids, skip_special_tokens=True),
+            )
+        )
     non_activating_examples = []
 
     for text in texts_non_activating:
-        token_ids: Int[Tensor, "ctx_len"] = tokenizer(text, return_tensors="pt")["input_ids"][0]
-        non_activating_examples.append(NonActivatingExample(
-            tokens=token_ids,
-            activations=torch.rand_like(token_ids, dtype=torch.float32),
-            str_tokens=tokenizer.batch_decode(token_ids, skip_special_tokens=True)
-        ))
-    
+        token_ids: Int[Tensor, "ctx_len"] = tokenizer(text, return_tensors="pt")[
+            "input_ids"
+        ][0]
+        non_activating_examples.append(
+            NonActivatingExample(
+                tokens=token_ids,
+                activations=torch.rand_like(token_ids, dtype=torch.float32),
+                str_tokens=tokenizer.batch_decode(token_ids, skip_special_tokens=True),
+            )
+        )
+
     record = LatentRecord(
         latent=Latent("test", 0),
         examples=activating_examples,
         not_active=non_activating_examples,
         explanation=explanation,
     )
-    record = sampler(record, SamplerConfig(
-        n_examples_train=len(activating_examples),
-        n_examples_test=len(activating_examples),
-        n_quantiles=1,
-        train_type="quantiles",
-        test_type="quantiles",
-    ))
-    
+    record = sampler(
+        record,
+        SamplerConfig(
+            n_examples_train=len(activating_examples),
+            n_examples_test=len(activating_examples),
+            n_quantiles=1,
+            train_type="quantiles",
+            test_type="quantiles",
+        ),
+    )
+
     most_recent_generation = None
+
     class MockClient(Client):
         async def generate(self, prompt, **kwargs) -> str:
             nonlocal most_recent_generation
             most_recent_generation = prompt, kwargs
             raise NotImplementedError("Prompt received")
-    
+
     client = MockClient("")
     gen_kwargs_dict = {
         "max_length": 100,
         "num_return_sequences": 1,
     }
-    explainer = DefaultExplainer(client, verbose=True, generation_kwargs=gen_kwargs_dict)
+    explainer = DefaultExplainer(
+        client, verbose=True, generation_kwargs=gen_kwargs_dict
+    )
     try:
         await explainer(record)
     except NotImplementedError:
@@ -117,9 +138,9 @@ async def test(
     full_prompt: list[Message] = most_recent_generation[0]
     last_element: Message = full_prompt[-1]
     assert "dog" in last_element["content"]
-    
+
     print("Mock tests passed")
-    
+
     print("Loading model")
     if explainer_provider == "offline":
         client = Offline(
@@ -136,17 +157,17 @@ async def test(
             explainer_model,
             api_key=os.environ["OPENROUTER_API_KEY"],
         )
-    
+
     explainer = DefaultExplainer(client, verbose=True)
     scorer = make_scorer(client)
-    
-    print("Testing explainer")  
+
+    print("Testing explainer")
     explainer_result = await explainer(record)
     assert explainer_result.explanation, "No explanation generated"
     # assert "dog" in explainer_result.explanation.lower(), \
     # f'Explanation does not contain "dog": {explainer_result.explanation}'
     print("Explanation:", explainer_result.explanation)
-    
+
     print("Testing scorer")
     scorer_result = await scorer(record)
     accuracy = 0
@@ -159,7 +180,7 @@ async def test(
     assert n_failing <= 1, f"Scorer failed {n_failing} times"
     accuracy /= len(scorer_result.score)
     assert accuracy > 0.5, f"Accuracy is {accuracy}"
-    
+
     print("All tests passed!")
     if explainer_provider == "offline":
         await client.close()
