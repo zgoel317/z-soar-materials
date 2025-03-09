@@ -41,7 +41,7 @@ class OpenRouter(Client):
         prompt: ChatFormatRequest,
         raw: bool = False,
         max_retries: int = 1,
-        **kwargs  # type: ignore
+        **kwargs,  # type: ignore
     ) -> Response:  # type: ignore
         kwargs.pop("schema", None)
         max_tokens = kwargs.pop("max_tokens", 500)
