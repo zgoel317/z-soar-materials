@@ -1,5 +1,6 @@
-from typing import Any
+from typing import Any, Literal
 import random
+from itertools import chain
 
 import torch
 from jaxtyping import Int
@@ -8,7 +9,7 @@ from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
 import pytest
 
 from delphi.latents import (
-    LatentRecord, Latent, ActivatingExample, LatentDataset, LatentCache, constructor
+    LatentRecord, Latent, ActivatingExample, LatentDataset, LatentCache, constructor, sampler
 )
 from delphi.latents.latents import ActivationData
 from delphi.latents.cache import get_nonzeros_batch
@@ -43,17 +44,21 @@ def seed():
 
 @pytest.mark.parametrize("n_samples", [5, 10, 100, 1000])
 @pytest.mark.parametrize("n_quantiles", [2, 5, 10, 23])
-def test_simple_cache(n_samples: int, n_quantiles: int,
+@pytest.mark.parametrize("n_examples", [0, 2, 5, 10, 20])
+@pytest.mark.parametrize("train_type", ["top", "random", "quantiles"])
+def test_simple_cache(n_samples: int, n_quantiles: int, n_examples: int, train_type: Literal["top", "random", "quantiles"],
                       ctx_len: int = 32,
                       seed: None = None, *, tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast):
     tokens = torch.randint(0, 100, (n_samples, ctx_len,))
     all_activation_data = []
     all_activations = []
-    for _ in range(2):
-        activations = torch.rand(n_samples, ctx_len) * (torch.rand(n_samples)[..., None] ** 2)
+    for feature_idx in range(2):
+        activations = torch.rand(n_samples, ctx_len, 1) * (torch.rand(n_samples)[..., None, None] ** 2)
         all_activations.append(activations)
         mask = activations > 0.1
-        all_activation_data.append(ActivationData(torch.nonzero(mask), activations[mask]))
+        locations = torch.nonzero(mask)
+        locations[..., 2] = feature_idx
+        all_activation_data.append(ActivationData(locations, activations[mask]))
     activation_data, other_activation_data = all_activation_data
     activations, other_activations = all_activations
     record = LatentRecord(
@@ -72,7 +77,7 @@ def test_simple_cache(n_samples: int, n_quantiles: int,
         ),
         tokens=tokens,
         tokenizer=tokenizer,
-        all_data={1: other_activation_data}
+        all_data={0: activation_data, 1: other_activation_data}
     )
     for i, j in zip(record.examples[:-1], record.examples[1:]):
         assert i.max_activation >= j.max_activation
@@ -80,3 +85,30 @@ def test_simple_cache(n_samples: int, n_quantiles: int,
         index = (tokens == i.tokens).all(dim=-1).float().argmax()
         assert (tokens[index] == i.tokens).all()
         assert activations[index].max() == i.max_activation
+    sampler(
+        record,
+        SamplerConfig(
+            n_examples_train=n_examples,
+            n_examples_test=n_examples,
+            n_quantiles=n_quantiles,
+            train_type=train_type,
+            test_type="quantiles"
+        )
+    )
+    assert len(record.train) <= n_examples
+    assert len(record.test) <= n_examples
+    for neighbor in record.neighbours:
+        assert neighbor.latent_index == 1
+    for example in chain(record.train, record.test):
+        assert isinstance(example, ActivatingExample)
+        assert example.normalized_activations is not None
+        assert example.normalized_activations.shape == example.activations.shape
+        assert (example.normalized_activations <= 10).all()
+        assert (example.normalized_activations >= 0).all()
+    for quantile_list in (record.test,) + ((record.train,) if train_type == "quantiles" else ()):   
+        quantile_list: list[ActivatingExample] = quantile_list
+        for k, i in enumerate(quantile_list):
+            for j in quantile_list[k + 1:]:
+                if i.quantile != j.quantile:
+                    assert i.max_activation >= j.max_activation
+                    assert i.quantile < j.quantile
