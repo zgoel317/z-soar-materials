@@ -3,8 +3,8 @@ import time
 from pathlib import Path
 
 import torch
-
 from beartype.claw import beartype_package
+
 beartype_package("delphi")
 
 from delphi.__main__ import run

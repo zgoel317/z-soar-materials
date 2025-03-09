@@ -7,7 +7,7 @@ from typing import Optional
 
 import numpy as np
 import torch
-from jaxtyping import Int, Float
+from jaxtyping import Float, Int
 from safetensors.numpy import load_file
 from torch import Tensor
 from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast

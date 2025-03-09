@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Sequence
 from collections.abc import Callable
+from typing import Any, Sequence
 
 import numpy as np
 

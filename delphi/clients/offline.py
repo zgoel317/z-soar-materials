@@ -74,7 +74,11 @@ class Offline(Client):
             self.statistics_path = Path("statistics")
             self.statistics_path.mkdir(parents=True, exist_ok=True)
 
-    async def process_func(self, batches: Union[str, list[Union[dict[str, str], list[dict[str, str]]]]], kwargs):
+    async def process_func(
+        self,
+        batches: Union[str, list[Union[dict[str, str], list[dict[str, str]]]]],
+        kwargs,
+    ):
         """
         Process a single request.
         """

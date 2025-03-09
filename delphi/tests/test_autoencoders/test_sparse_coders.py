@@ -1,9 +1,10 @@
 import pytest
 import torch
 import torch.nn as nn
-
 from transformers import PreTrainedModel
+
 from delphi.config import RunConfig
+
 # Import the function to be tested
 from delphi.sparse_coders import load_hooks_sparse_coders
 
@@ -16,7 +17,7 @@ class DummyRunConfig:
         # Additional required fields can be added here if needed.
         self.model = "dummy_model"
         self.hf_token = ""
-    
+
     @property
     def __class__(self) -> type:
         return RunConfig

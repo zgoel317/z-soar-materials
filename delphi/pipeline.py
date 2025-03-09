@@ -1,7 +1,7 @@
 import asyncio
+from collections.abc import AsyncIterable, Awaitable, Callable
 from functools import wraps
 from typing import Any
-from collections.abc import Callable, AsyncIterable, Awaitable
 
 from tqdm.asyncio import tqdm
 
@@ -110,9 +110,7 @@ class Pipeline:
 
         async for item in self.generate_items():
             number_of_items += 1
-            task = asyncio.create_task(
-                process_and_update(item, semaphore)
-            )
+            task = asyncio.create_task(process_and_update(item, semaphore))
             tasks.add(task)
 
             if len(tasks) >= max_concurrent:
@@ -149,9 +147,7 @@ class Pipeline:
         else:
             raise TypeError("The first pipe must be an async iterable or a callable")
 
-    async def process_item(
-        self, item: Any, semaphore: asyncio.Semaphore
-    ) -> Any:
+    async def process_item(self, item: Any, semaphore: asyncio.Semaphore) -> Any:
         """
         Processes a single item through all pipes except the first one.
 

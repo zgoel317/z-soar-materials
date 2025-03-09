@@ -1,15 +1,15 @@
+from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from collections.abc import Callable
+from typing import TypeVar, Union
 
 import torch
+import torch._dynamo.eval_frame
 from sparsify import SparseCoder
 from torch import Tensor
 from transformers import PreTrainedModel
-from typing import TypeVar, Union
-import torch._dynamo.eval_frame
 
-T = TypeVar('T')
+T = TypeVar("T")
 PotentiallyWrapped = Union[T, torch._dynamo.eval_frame.OptimizedModule]
 
 

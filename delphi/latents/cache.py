@@ -1,7 +1,7 @@
 import json
 from collections import defaultdict
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -21,7 +21,7 @@ latent_tensor_type = Float[Tensor, "batch sequence num_latents"]
 
 
 def get_nonzeros_batch(
-    latents: latent_tensor_type
+    latents: latent_tensor_type,
 ) -> tuple[
     Float[Tensor, "batch sequence num_latents"], Float[Tensor, "batch sequence "]
 ]:
