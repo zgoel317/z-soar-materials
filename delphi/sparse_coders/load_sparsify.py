@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Protocol
+from typing import Optional, Protocol, Union
 
 import torch
 import torch._dynamo.eval_frame
@@ -14,6 +14,10 @@ class PotentiallyWrappedSparseCoder(Protocol):
     def pre_acts(self, x: Tensor) -> Tensor: ...
 
     def select_topk(self, pre_acts: Tensor) -> tuple[Tensor, Tensor]: ...
+
+    def cuda(
+        self, device: Optional[Union[int, torch.device]] = None
+    ) -> torch.nn.Module: ...
 
     cfg: SparseCoderConfig
 
