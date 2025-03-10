@@ -36,6 +36,21 @@ async def test(
     num_gpus: int = 1,
     scorer_type: Literal["fuzz", "detect"] = "fuzz",
 ):
+    """Test different client and that the explainer
+    and scorer are calling the client correctly.
+
+    Args:
+        explainer_provider (Literal["offline", "openrouter"], optional):
+        Which client type to use. Defaults to "offline".
+        explainer_model (str, optional): VLLM model name or OpenRouter ID.
+        Defaults to "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4".
+        model_max_len (int, optional): Maximum length for VLLM. Defaults to 5120.
+        num_gpus (int, optional): Number of GPUs to use for VLLM (TP size).
+        Defaults to 1.
+        scorer_type (Literal["fuzz", "detect"], optional): Scoring type to use.
+        Defaults to "fuzz".
+    """
+
     def make_scorer(client: Client):
         if scorer_type == "fuzz":
             return FuzzingScorer(client, verbose=True)
@@ -60,10 +75,14 @@ async def test(
     for text in texts_activating:
         token_ids: Int[Tensor, "ctx_len"] = tokenizer(text, return_tensors="pt")[
             "input_ids"
-        ][0]
+        ][
+            0
+        ]  # type: ignore
         dog_tokens = tokenizer("Dog dog Dog dogs Dogs", return_tensors="pt")[
             "input_ids"
-        ][0]
+        ][
+            0
+        ]  # type: ignore
         activating_examples.append(
             ActivatingExample(
                 tokens=token_ids,
