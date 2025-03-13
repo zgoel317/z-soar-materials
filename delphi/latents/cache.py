@@ -279,14 +279,13 @@ class LatentCache:
                             self.cache.add(sae_latents, batch, batch_number, hookpoint)
                             firing_counts = (sae_latents > 0).sum((0, 1))
                             if self.width is None:
+                                self.width = sae_latents.shape[2]
+                            if hookpoint not in self.hookpoint_firing_counts:
                                 self.hookpoint_firing_counts[hookpoint] = (
                                     firing_counts.cpu()
                                 )
-                                self.width = sae_latents.shape[2]
                             else:
-                                self.hookpoint_firing_counts[
-                                    hookpoint
-                                ] += firing_counts.cpu()
+                                self.hookpoint_firing_counts[hookpoint] += firing_counts.cpu()
 
                 # Update the progress bar
                 pbar.update(1)
