@@ -111,6 +111,8 @@ class NeighbourCalculator:
                 for start in tqdm(range(0, number_latents, batch_size)):
                     rows = wT[start : start + batch_size]
                     similarity_matrix = weight_matrix_normalized @ rows
+                    # remove nan values
+                    similarity_matrix = torch.nan_to_num(similarity_matrix, 0)
                     indices, values = torch.topk(
                         similarity_matrix, self.number_of_neighbours + 1, dim=1
                     )
