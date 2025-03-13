@@ -165,7 +165,8 @@ class RunConfig(Serializable):
     as well as increasing the scorer LLM task difficulty."""
 
     overwrite: list[Literal["cache", "neighbours", "scores"]] = list_field(
-        choices=["cache", "neighbours", "scores"]
+        choices=["cache", "neighbours", "scores"],
+        default=["scores"],
     )
 
     """List of run stages to recompute. This is a debugging tool
