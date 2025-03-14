@@ -29,8 +29,6 @@ class IntruderWord(IntruderSample):
     A sample for an intruder word experiment.
     """
 
-    frequency: list[int]
-
 
 @dataclass
 class IntruderSentence(IntruderSample):
@@ -66,8 +64,8 @@ class IntruderScorer(Classifier):
         n_examples_shown: int = 1,
         log_prob: bool = False,
         temperature: float = 0.0,
+        cot: bool = False,
         type: Literal["word", "sentence", "fuzzed"] = "word",
-        n_quantiles: int = 10,
         seed: int = 42,
         **generation_kwargs,
     ):
@@ -96,10 +94,9 @@ class IntruderScorer(Classifier):
             **generation_kwargs,
         )
         self.type = type
-        self.n_quantiles = n_quantiles
-
+        self.cot = cot
     def prompt(self, examples: str) -> list[dict]:
-        return intruder_prompt(examples)
+        return intruder_prompt(examples,cot=self.cot)
 
     async def __call__(
         self,
@@ -166,78 +163,75 @@ class IntruderScorer(Classifier):
 
         assert len(record.not_active) > 0, "No non-activating examples found"
         batches = []
+        quantiled_intruder_sentences = self._get_quantiled_examples(record.test)
         if self.type == "word":
             # count words
             non_active_counts = self._count_words(record.not_active)
-            active_counts = self._count_words(record.test)
+            quantiled_active_counts: dict[int, list[tuple[str, int]]] = {}
+            quantile_non_active_counts: dict[int, dict[str, int]] = {}
+            number_quantiles = len(quantiled_intruder_sentences)
+            for quantiles,examples in quantiled_intruder_sentences.items():
+                active_counts = self._count_words(examples)
 
-            # sort active_counts
-            chosen_active = sorted(
-                active_counts.items(), key=lambda x: x[1], reverse=True
-            )
-            # get the non_active_counts that are not in the active_counts
-            exclusive_non_active_counts = {
-                k: v for k, v in non_active_counts.items() if k not in active_counts
-            }
-
-            max_number_quantiles = min(
-                len(chosen_active) // (self.n_examples_shown - 1), self.n_quantiles
-            )
-            quantilized_active_counts = []
-            for i in range(max_number_quantiles):
-                # 0 is most frequent, max_number_quantiles is least frequent
-
-                selected = chosen_active[
-                    i
-                    * (self.n_examples_shown - 1) : (i + 1)
-                    * (self.n_examples_shown - 1)
-                ]
-                quantile_words, quantile_frequencies = zip(*selected)
-                quantilized_active_counts.append(
-                    (list(quantile_words), list(quantile_frequencies))
+                # if not more than 3 examples skip
+                if len(active_counts) < 3:
+                    continue
+                # non active words can't be in the active words
+                exclusive_non_active_counts = {
+                    k: v for k, v in non_active_counts.items() if k not in active_counts
+                }
+                quantile_non_active_counts[quantiles] = exclusive_non_active_counts
+                chosen_active = sorted(
+                    active_counts.items(), key=lambda x: x[1], reverse=True
                 )
+                quantiled_active_counts[quantiles] = chosen_active
+            for quantiles,active_counts in quantiled_active_counts.items():
+                # for each quantile, do some intruder words
+                n_samples = len(record.not_active)//number_quantiles
+                non_active_samples = quantile_non_active_counts[quantiles]
+                n_samples = min(n_samples,len(non_active_samples))
+                
+                #randomly choose n_samples from non_active_samples
+                #TODO: do we also want it to be weighted by the count?
+                non_active_samples = self.rng.sample(list(non_active_samples.keys()),
+                                                     n_samples)
 
-            non_active = len(record.not_active)
-            # get as many intruder as non_active if possible
-            min_n = min(non_active, len(exclusive_non_active_counts))
-            # sort the non_active_counts by value
-            non_active = sorted(
-                exclusive_non_active_counts.items(), key=lambda x: x[1], reverse=True
-            )[:min_n]
-            if len(non_active) == 0:
-                # This happens with contrastive examples sometimes
-                non_active = chosen_active[-5:]
-            # get the top min_n
-            intruder_words, intruder_frequencies = zip(*non_active)
+                n_active_samples = min(len(active_counts),self.n_examples_shown-1)
+                
+                # Extract just the words from the (word, count) tuples in active_counts,
+                # discarding the count values
+                active_examples,active_counts = zip(*active_counts)
+                for intruder_word in non_active_samples:
+                    # choose the active words, with a frequency weighted by the count
+                    # without replacement
+                    examples_to_choose = list(active_examples).copy()
+                    counts_to_choose = list(active_counts).copy()
+                    chosen_examples = []
+                    for i in range(n_active_samples):
+                        chosen_index = self.rng.choices(range(len(examples_to_choose)),
+                                                        weights=counts_to_choose,
+                                                        k=1)[0]
+                        chosen_examples.append(examples_to_choose[chosen_index])
+                        examples_to_choose.pop(chosen_index)
+                        counts_to_choose.pop(chosen_index)
 
-            for i, intruder in enumerate(intruder_words):
-                # choose the quantile of the active examples
-                quantile_index = self.rng.randint(0, max_number_quantiles - 1)
-                (active_examples, active_frequencies) = quantilized_active_counts[
-                    quantile_index
-                ]
-
-                # chose the index of the intruder
-                intruder_index = self.rng.randint(0, self.n_examples_shown - 1)
-                # add the intruder to the examples
-                examples = active_examples.copy()
-
-                examples.insert(intruder_index, intruder)
-                frequencies = active_frequencies.copy()
-                frequencies.insert(intruder_index, intruder_frequencies[i])
-                # create the sample
-                batches.append(
-                    IntruderWord(
-                        examples=examples,
-                        intruder_index=intruder_index,
-                        frequency=frequencies,
-                        chosen_quantile=quantile_index,
+                    # chose the index of the intruder
+                    intruder_index = self.rng.randint(0, n_active_samples- 1)
+                    # add the intruder to the examples
+                    examples = chosen_examples.copy()
+                    examples.insert(intruder_index, intruder_word)
+                    # create the sample
+                    batches.append(
+                        IntruderWord(
+                            examples=examples,
+                            intruder_index=intruder_index,
+                            chosen_quantile=quantiles,
+                        )
                     )
-                )
 
+            
         if self.type == "sentence" or self.type == "fuzzed":
             intruder_sentences = record.not_active
-            quantiled_intruder_sentences = self._get_quantiled_examples(record.test)
             for i, intruder in enumerate(intruder_sentences):
                 quantile_index = self.rng.randint(
                     0, len(quantiled_intruder_sentences.keys()) - 1

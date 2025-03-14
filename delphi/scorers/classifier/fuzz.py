@@ -23,7 +23,7 @@ class FuzzingScorer(Classifier, Scorer):
         threshold: float = 0.3,
         log_prob: bool = False,
         temperature: float = 0.0,
-        fuzz_type: Literal["default", "hard", "contrastive"] = "default",
+        fuzz_type: Literal["default", "active"] = "default",
         **generation_kwargs,
     ):
         """
@@ -73,14 +73,22 @@ class FuzzingScorer(Classifier, Scorer):
 
         if self.fuzz_type == "default":
             assert len(record.not_active) > 0, "No non-activating examples found"
-            # default uses non-activating examples and
-            # randomly highlights n_incorrect tokens
-            samples = examples_to_samples(
-                record.not_active,
-                n_incorrect=n_incorrect,
-                highlighted=True,
-            )
-        elif self.fuzz_type == "hard":
+            # check if non_activating examples have any activations > 0
+            # if they do they are contrastive examples
+            if (record.not_active[0].activations > 0).any():
+                samples = examples_to_samples(
+                    record.not_active,
+                    n_incorrect=0,
+                    highlighted=True,
+                )
+            else:
+            # if they don't we use randomly highlight n_incorrect tokens
+                samples = examples_to_samples(
+                    record.test,
+                    n_incorrect=n_incorrect,
+                    highlighted=True,
+                )
+        elif self.fuzz_type == "active":
             # hard uses activating examples and
             # highlights non active tokens
             extras = []
@@ -98,17 +106,6 @@ class FuzzingScorer(Classifier, Scorer):
                 n_incorrect=n_incorrect,
                 highlighted=True,
             )
-        elif self.fuzz_type == "contrastive":
-            # contrastive uses non-activating examples and
-            # highlights active tokens of neighbours
-            assert len(record.not_active) > 0, "No non-activating examples found"
-            
-            samples = examples_to_samples(
-                record.not_active,
-                n_incorrect=0,
-                highlighted=True,
-            )
-
         samples.extend(
             examples_to_samples(
                 record.test,  # type: ignore
