@@ -5,9 +5,7 @@ Some sentences will have words highlighted with <> tags. Do not overthink.
 
 There is only ever one intruder in the examples.
 
-For each example in turn, return 1 if the example is an intruder or 0 if it is not.
-
-You can think about your reasoning and then you should write [RESPONSE]: followed by your response in a valid Python list.
+You should write [RESPONSE]: followed by the index of the intruder.
 
 """
 
@@ -20,7 +18,7 @@ Example 2: shown, is generally not eligible for ads. For example, videos about r
 Example 3: line, with the left side âĢĶ namely tackle Byron Bell at tackle and guard Amini
 """
 DSCORER_RESPONSE_ONE_COT = "There are 3 examples that are related to American football. The intruder is 2 because it is about videos and ads."
-DSCORER_RESPONSE_ONE = "[RESPONSE]: [0,0,1,0]"
+DSCORER_RESPONSE_ONE = "[RESPONSE]: 2"
 
 
 # https://www.neuronpedia.org/gpt2-small/8-res-jb/12654
@@ -33,7 +31,7 @@ Example 3:ĊĊIt has been devised by Director of Public Prosecutions (DPP)
 Example 4: and fair investigation not even include the Director of Athletics? Â· Finally, we believe the
 """
 DSCORER_RESPONSE_TWO_COT = "I can see that there are several examples that have the word 'of' before a capital letter. The intruder is 0 because it does not."
-DSCORER_RESPONSE_TWO = "[RESPONSE]: [1,0,0,0,0]"
+DSCORER_RESPONSE_TWO = "[RESPONSE]: 0"
 
 # https://www.neuronpedia.org/gpt2-small/8-res-jb/12654
 DSCORER_EXAMPLE_THREE = """Examples:
@@ -46,7 +44,7 @@ Example 4: cycling
 """
 DSCORER_RESPONSE_THREE_COT = "All examples are related to activities, the first 3 and the last one being about sports and physical activities. Eating is not a sport or physical activity so it is the intruder."
 
-DSCORER_RESPONSE_THREE = "[RESPONSE]: [0,0,0,1,0]"
+DSCORER_RESPONSE_THREE = "[RESPONSE]: 3"
 
 DSCORER_EXAMPLE_FOUR = """
 Example 0: You<< guys>> support me in many other ways already and
@@ -57,7 +55,7 @@ Example 3:American, told Hannity that you<< guys>> are playing the race card.
 
 DSCORER_RESPONSE_FOUR_COT = "I see that all the examples have the word 'guys' highlighted. All examples except example 1 have the word 'you' before 'guys', therefore, example 1 is the intruder."
 
-DSCORER_RESPONSE_FOUR = "[RESPONSE]: [0,1,0,0]"
+DSCORER_RESPONSE_FOUR = "[RESPONSE]: 1"
 
 GENERATION_PROMPT = """Examples:
 

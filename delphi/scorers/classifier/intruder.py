@@ -1,7 +1,7 @@
 import asyncio
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal, Sequence
 
 from ...clients.client import Client
@@ -49,7 +49,7 @@ class IntruderResult:
 
     interpretation: str = ""
     sample: IntruderSample | None = None
-    predictions: list[bool] = field(default_factory=list)
+    prediction: int = 0
     correct_index: int = -1
     correct: bool = False
 
@@ -343,8 +343,8 @@ class IntruderScorer(Classifier):
     def _parse(
         self,
         string: str,
-    ) -> tuple[str, list[bool]]:
-        """The answer will be in the format interpretation [RESPONSE]: [0, 1, 0, 1]"""
+    ) -> tuple[str, int]:
+        """The answer will be in the format interpretation [RESPONSE]: 1"""
         # Find the first instance of the text with [RESPONSE]:
         pattern = r"\[RESPONSE\]:"
         match = re.search(pattern, string)
@@ -354,18 +354,14 @@ class IntruderScorer(Classifier):
         interpretation = string[: match.start()]
         # get everything after the match
         after = string[match.end() :]
-        # the response is a list so you can pattern it again
-        pattern = r"\[.*?\]"
-        match = re.search(pattern, after)
-        if match is None:
-            raise ValueError("List not found")
-        response = match.group(0)
-        # convert the response to a list
-        predictions = json.loads(response)
-        # assert the length of the predictions is the same as the number of examples
-        assert len(predictions) == self.n_examples_shown
-        # return the interpretation and the predictions
-        return interpretation, predictions
+        # the response should be a single number
+        try:
+            prediction = int(after.strip())
+        except ValueError:
+            raise ValueError("Response is not a number")
+        if prediction < 0 or prediction >= self.n_examples_shown:
+            raise ValueError("Response is out of range")
+        return interpretation, prediction
 
     async def _generate(self, sample: IntruderSample) -> IntruderResult:
         """
@@ -385,23 +381,19 @@ class IntruderScorer(Classifier):
         else:
 
             try:
-                interpretation, predictions = self._parse(response.text)
+                interpretation, prediction = self._parse(response.text)
             except Exception as e:
                 logger.error(f"Parsing selections failed: {e}")
                 # default result is a error
                 return IntruderResult()
 
         # check that the only prediction is the intruder
-        correct = False
-        if sum(predictions) != 1:
-            correct = False
-        else:
-            correct = predictions[sample.intruder_index]
+        correct = prediction == sample.intruder_index
 
         result = IntruderResult(
             interpretation=interpretation,
             sample=sample,
-            predictions=predictions,
+            prediction=prediction,
             correct_index=sample.intruder_index,
             correct=correct,
         )
