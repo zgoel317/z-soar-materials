@@ -62,10 +62,9 @@ class IntruderScorer(Classifier):
         client: Client,
         verbose: bool = False,
         n_examples_shown: int = 1,
-        log_prob: bool = False,
         temperature: float = 0.0,
         cot: bool = False,
-        type: Literal["word", "sentence", "fuzzed"] = "word",
+        type: Literal["word", "fuzzed"] = "word",
         seed: int = 42,
         **generation_kwargs,
     ):
@@ -79,7 +78,6 @@ class IntruderScorer(Classifier):
             n_examples_shown: The number of examples to show in the prompt,
                         a larger number can both leak information and make
                         it harder for models to generate anwers in the correct format
-            log_prob: Whether to use log probabilities to allow for AUC calculation
             temperature: The temperature to use for generation
             type: The type of intruder to use, either "word" or "sentence"
             generation_kwargs: Additional generation kwargs
@@ -88,7 +86,6 @@ class IntruderScorer(Classifier):
             client=client,
             verbose=verbose,
             n_examples_shown=n_examples_shown,
-            log_prob=log_prob,
             temperature=temperature,
             seed=seed,
             **generation_kwargs,
@@ -230,7 +227,7 @@ class IntruderScorer(Classifier):
                     )
 
             
-        if self.type == "sentence" or self.type == "fuzzed":
+        if self.type == "fuzzed":
             intruder_sentences = record.not_active
             for i, intruder in enumerate(intruder_sentences):
                 quantile_index = self.rng.randint(
@@ -246,35 +243,29 @@ class IntruderScorer(Classifier):
                 # convert the examples to strings
                 constructed_examples = []
                 intruder_index = self.rng.randint(0, examples_to_show)
-                if self.type == "sentence":
-                    # no highlighting
-                    constructed_examples = [
-                        "".join(example.str_tokens) for example in active_examples
-                    ]
-                    intruder_sentence = "".join(intruder.str_tokens)
-                elif self.type == "fuzzed":
-                    # highlights the active tokens
-                    constructed_examples = []
-                    active_tokens = 0
-                    for example in active_examples:
-                        text, _ = _prepare_text(
-                            example, n_incorrect=0, threshold=0.3, highlighted=True
-                        )
-                        constructed_examples.append(text)
-                        active_tokens += (example.activations > 0).sum().item()
-                    active_tokens = int(active_tokens / len(active_examples))
-                    # if example is contrastive, use the active tokens
-                    # otherwise use the non-activating tokens
-                    if intruder.activations.max() > 0:
-                        n_incorrect = 0
-                    else:
-                        n_incorrect = active_tokens
-                    intruder_sentence, _ = _prepare_text(
-                        intruder,
-                        n_incorrect=n_incorrect,
-                        threshold=0.3,
-                        highlighted=True,
+        
+                # highlights the active tokens
+                constructed_examples = []
+                active_tokens = 0
+                for example in active_examples:
+                    text, _ = _prepare_text(
+                        example, n_incorrect=0, threshold=0.3, highlighted=True
                     )
+                    constructed_examples.append(text)
+                    active_tokens += (example.activations > 0).sum().item()
+                active_tokens = int(active_tokens / len(active_examples))
+                # if example is contrastive, use the active tokens
+                # otherwise use the non-activating tokens
+                if intruder.activations.max() > 0:
+                    n_incorrect = 0
+                else:
+                    n_incorrect = active_tokens
+                intruder_sentence, _ = _prepare_text(
+                    intruder,
+                    n_incorrect=n_incorrect,
+                    threshold=0.3,
+                    highlighted=True,
+                )
 
                 constructed_examples.insert(intruder_index, intruder_sentence)
                 used_sentences = []
