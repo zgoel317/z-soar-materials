@@ -62,6 +62,18 @@ class FuzzingScorer(Classifier, Scorer):
         ) / len(examples)
 
         return ceil(avg)
+    
+    def _convert_to_non_activating(self, examples: list[ActivatingExample]
+                                   ) -> list[NonActivatingExample]:
+        """
+        Convert a list of activating examples to a list of non-activating examples.
+        """
+        return [NonActivatingExample(
+            tokens=example.tokens,
+            activations=example.activations,
+            str_tokens=example.str_tokens,
+            normalized_activations=example.normalized_activations,
+            distance=-1) for example in examples]
 
     def _prepare(self, record: LatentRecord) -> list[Sample]:  # type: ignore
         """
@@ -84,23 +96,14 @@ class FuzzingScorer(Classifier, Scorer):
             else:
             # if they don't we use randomly highlight n_incorrect tokens
                 samples = examples_to_samples(
-                    record.test,
+                    record.not_active,
                     n_incorrect=n_incorrect,
                     highlighted=True,
                 )
         elif self.fuzz_type == "active":
             # hard uses activating examples and
             # highlights non active tokens
-            extras = []
-            for example in record.test:
-                # convert from activating to non-activating
-                new_example = NonActivatingExample(
-                    tokens=example.tokens,
-                    activations=example.activations,
-                    str_tokens=example.str_tokens,
-                    normalized_activations=example.normalized_activations,
-                    distance=-1)
-                extras.append(new_example)
+            extras = self._convert_to_non_activating(record.test)
             samples = examples_to_samples(
                 extras,
                 n_incorrect=n_incorrect,
