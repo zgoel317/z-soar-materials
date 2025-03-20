@@ -85,8 +85,8 @@ class NeighbourCalculator:
         print("Computing similarity neighbours")
         # We use the encoder vectors to compute the similarity between latents
         if method == "encoder":
-            encoder = self.autoencoder.encoder.weight.data.cuda()
-            weight_matrix_normalized = encoder / encoder.norm(dim=1, keepdim=True)
+            encoder = self.autoencoder.encoder.weight.data.cuda()  # type: ignore
+            weight_matrix_normalized = encoder / encoder.norm(dim=1, keepdim=True)  # type: ignore
 
         elif method == "decoder":
             # TODO: we would probably go around this by
@@ -94,7 +94,7 @@ class NeighbourCalculator:
             assert isinstance(
                 self.autoencoder, Sae
             ), "Autoencoder must be a sparsify.Sae for decoder similarity"
-            decoder = self.autoencoder.W_dec.data.cuda()  # type: ignore
+            decoder = self.autoencoder.W_dec.data.cuda()  # type:ignore
             weight_matrix_normalized = decoder / decoder.norm(dim=1, keepdim=True)
         else:
             raise ValueError(f"Unknown method: {method}. Use 'encoder' or 'decoder'")
@@ -111,6 +111,8 @@ class NeighbourCalculator:
                 for start in tqdm(range(0, number_latents, batch_size)):
                     rows = wT[start : start + batch_size]
                     similarity_matrix = weight_matrix_normalized @ rows
+                    # remove nan values
+                    similarity_matrix = torch.nan_to_num(similarity_matrix, 0)
                     indices, values = torch.topk(
                         similarity_matrix, self.number_of_neighbours + 1, dim=1
                     )

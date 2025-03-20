@@ -7,12 +7,13 @@ from .latents import ActivatingExample, LatentRecord
 
 
 def normalize_activations(
-    examples: list[ActivatingExample], max_activation: float
+    examples: list[ActivatingExample], max_activation: float, eps: float = 1e-6
 ) -> list[ActivatingExample]:
+    max_activation = max(max_activation, eps)
     for example in examples:
         example.normalized_activations = (
-            example.activations * 10 / max_activation
-        ).floor()
+            (example.activations * 10 / max_activation).floor().clamp(0, 10)
+        )
     return examples
 
 

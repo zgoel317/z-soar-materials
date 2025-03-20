@@ -26,7 +26,7 @@ This command will:
 
 The pipeline is highly configurable and can also be called programmatically (see the [end-to-end test](https://github.com/EleutherAI/delphi/blob/main/delphi/tests/e2e.py) for an example).
 
-To use other scorer types, instantiate a custom pipeline.
+To use other scorer types, instantiate a custom pipeline. You can take inspiration from the main pipeline in [delphi.\_\_main\_\_](https://github.com/EleutherAI/delphi/blob/main/delphi/__main__.py).
 
 ## Caching
 
@@ -230,9 +230,13 @@ The experiments discussed in [the blog post](https://blog.eleuther.ai/autointerp
 
 ## Development
 
-Run unit tests:
+Set up the pre-commit lint and run the unit tests:
 
-```pytest .```
+```bash
+pip install pre-commit pytest
+pre-commit install
+pytest .
+```
 
 Run an end-to-end test:
 
