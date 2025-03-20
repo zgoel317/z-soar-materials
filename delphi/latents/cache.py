@@ -522,11 +522,11 @@ def generate_statistics_cache(
         print(f"Fraction of strong single token latents: {strong_token_fraction:%}")
 
     return CacheStatistics(
-        frac_alive=fraction_alive,
-        frac_fired_1pct=one_percent,
-        frac_fired_10pct=ten_percent,
-        frac_weak_single_token=single_token_fraction,
-        frac_strong_single_token=strong_token_fraction,
+        frac_alive=float(fraction_alive),
+        frac_fired_1pct=float(one_percent),
+        frac_fired_10pct=float(ten_percent),
+        frac_weak_single_token=float(single_token_fraction),
+        frac_strong_single_token=float(strong_token_fraction),
     )
 
 

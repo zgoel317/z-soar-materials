@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Optional, Protocol, Union
+from typing import Optional, Protocol, Union, runtime_checkable
 
 import torch
 import torch._dynamo.eval_frame
@@ -10,6 +10,7 @@ from torch import Tensor
 from transformers import PreTrainedModel
 
 
+@runtime_checkable
 class PotentiallyWrappedSparseCoder(Protocol):
     def pre_acts(self, x: Tensor) -> Tensor: ...
 
