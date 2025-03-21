@@ -6,19 +6,21 @@ from typing import Optional, Protocol, Union, runtime_checkable
 import torch
 import torch._dynamo.eval_frame
 from sparsify import SparseCoder, SparseCoderConfig
+from sparsify.sparse_coder import EncoderOutput
 from torch import Tensor
 from transformers import PreTrainedModel
 
 
 @runtime_checkable
 class PotentiallyWrappedSparseCoder(Protocol):
-    def encode(self, x: Tensor) -> tuple[Tensor, Tensor]: ...
+    def encode(self, x: Tensor) -> EncoderOutput: ...
 
     def cuda(
         self, device: Optional[Union[int, torch.device]] = None
     ) -> torch.nn.Module: ...
 
     cfg: SparseCoderConfig
+    num_latents: int
 
 
 def sae_dense_latents(x: Tensor, sae: PotentiallyWrappedSparseCoder) -> Tensor:
