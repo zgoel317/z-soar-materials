@@ -61,6 +61,7 @@ def test_simple_cache(
     *,
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
 ):
+    torch.manual_seed(0)
     tokens = torch.randint(
         0,
         100,

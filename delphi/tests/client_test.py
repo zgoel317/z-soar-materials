@@ -28,7 +28,7 @@ from delphi.scorers import DetectionScorer, FuzzingScorer  # noqa: E402
 logger.addHandler(logging.StreamHandler())
 
 
-async def test(
+async def main(
     explainer_provider: Literal["offline", "openrouter"] = "offline",
     # meta-llama/llama-3.3-70b-instruct
     explainer_model: str = "hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
@@ -208,4 +208,4 @@ async def test(
 
 if __name__ == "__main__":
     dotenv.load_dotenv()
-    fire.Fire(test)
+    fire.Fire(main)

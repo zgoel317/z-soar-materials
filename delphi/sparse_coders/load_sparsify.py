@@ -12,9 +12,7 @@ from transformers import PreTrainedModel
 
 @runtime_checkable
 class PotentiallyWrappedSparseCoder(Protocol):
-    def pre_acts(self, x: Tensor) -> Tensor: ...
-
-    def select_topk(self, pre_acts: Tensor) -> tuple[Tensor, Tensor]: ...
+    def encode(self, x: Tensor) -> tuple[Tensor, Tensor]: ...
 
     def cuda(
         self, device: Optional[Union[int, torch.device]] = None
