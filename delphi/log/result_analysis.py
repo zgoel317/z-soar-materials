@@ -267,9 +267,8 @@ def plot_line(df: pd.DataFrame, visualize_path: Path):
 
 
 def log_results(scores_path: Path, visualize_path: Path, target_modules: list[str]):
-    hookpoint_firing_counts: dict[str, Tensor] = torch.load(
-        Path.cwd() / "results" / "log" / "hookpoint_firing_counts.pt", weights_only=True
-    )
+    log_path = scores_path.parent / "log" / "hookpoint_firing_counts.pt"
+    hookpoint_firing_counts: dict[str, Tensor] = torch.load(log_path, weights_only=True)
     df = build_scores_df(scores_path, target_modules, hookpoint_firing_counts)
 
     # Calculate the number of dead features for each module which will not be in the df

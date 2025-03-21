@@ -60,7 +60,7 @@ def get_nonzeros_batch(
     return nonzero_latent_locations, nonzero_latent_activations
 
 
-class Cache:
+class InMemoryCache:
     """
     The Cache class stores latent locations and activations for modules.
     It provides methods for adding, saving, and retrieving non-zero activations.
@@ -204,8 +204,9 @@ class LatentCache:
         self.transcode = transcode
         self.batch_size = batch_size
         self.width = None
-        self.cache = Cache(filters, batch_size=batch_size)
+        self.cache = InMemoryCache(filters, batch_size=batch_size)
         self.hookpoint_firing_counts: dict[str, Tensor] = {}
+
         self.log_path = log_path
         if filters is not None:
             self.filter_submodules(filters)
@@ -263,7 +264,6 @@ class LatentCache:
         total_tokens = 0
         total_batches = len(token_batches)
         tokens_per_batch = token_batches[0].numel()
-
         with tqdm(total=total_batches, desc="Caching latents") as pbar:
             for batch_number, batch in enumerate(token_batches):
                 total_tokens += tokens_per_batch
@@ -284,6 +284,7 @@ class LatentCache:
                             firing_counts = (sae_latents > 0).sum((0, 1))
                             if self.width is None:
                                 self.width = sae_latents.shape[2]
+
                             if hookpoint not in self.hookpoint_firing_counts:
                                 self.hookpoint_firing_counts[hookpoint] = (
                                     firing_counts.cpu()
@@ -299,6 +300,7 @@ class LatentCache:
 
         print(f"Total tokens processed: {total_tokens:,}")
         self.cache.save()
+        self.save_firing_counts()
 
     def save(self, save_dir: Path, save_tokens: bool = True):
         """
@@ -424,7 +426,6 @@ class LatentCache:
                 config_dict = cfg.to_dict()
                 config_dict["model_name"] = model_name
                 json.dump(config_dict, f, indent=4)
-        self.save_firing_counts()
 
     def save_firing_counts(self):
         """

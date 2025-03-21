@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from multiprocessing import cpu_count
 from typing import Literal
 
+import torch
 from simple_parsing import Serializable, field, list_field
 
 
@@ -143,7 +144,7 @@ class RunConfig(Serializable):
     """Number of processes to use for preprocessing data"""
 
     num_gpus: int = field(
-        default=1,
+        default=torch.cuda.device_count(),
     )
     """Number of GPUs to use for explanation and scoring."""
 
@@ -165,7 +166,8 @@ class RunConfig(Serializable):
     as well as increasing the scorer LLM task difficulty."""
 
     overwrite: list[Literal["cache", "neighbours", "scores"]] = list_field(
-        choices=["cache", "neighbours", "scores"]
+        choices=["cache", "neighbours", "scores"],
+        default=[],
     )
 
     """List of run stages to recompute. This is a debugging tool

@@ -277,9 +277,7 @@ def populate_cache(
     )
     cache.run(cache_cfg.n_tokens, tokens)
 
-    # Save firing counts to the run-specific log directory
     if run_cfg.verbose:
-        cache.save_firing_counts()
         cache.generate_statistics_cache()
 
     cache.save_splits(
