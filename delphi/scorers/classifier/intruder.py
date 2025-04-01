@@ -1,11 +1,10 @@
 import asyncio
-import json
 import re
 from dataclasses import dataclass
 from typing import Literal, Sequence
 
 from ...clients.client import Client
-from ...latents import ActivatingExample, Example, LatentRecord
+from ...latents import ActivatingExample, Example, LatentRecord, NonActivatingExample
 from ...logger import logger
 from .classifier import Classifier, ScorerResult
 from .prompts.intruder_prompt import prompt as intruder_prompt
@@ -64,7 +63,7 @@ class IntruderScorer(Classifier):
         n_examples_shown: int = 1,
         temperature: float = 0.0,
         cot: bool = False,
-        type: Literal["word", "fuzzed"] = "word",
+        type: Literal["default", "internal"] = "default",
         seed: int = 42,
         **generation_kwargs,
     ):
@@ -92,8 +91,9 @@ class IntruderScorer(Classifier):
         )
         self.type = type
         self.cot = cot
+
     def prompt(self, examples: str) -> list[dict]:
-        return intruder_prompt(examples,cot=self.cot)
+        return intruder_prompt(examples, cot=self.cot)
 
     async def __call__(
         self,
@@ -161,99 +161,34 @@ class IntruderScorer(Classifier):
         assert len(record.not_active) > 0, "No non-activating examples found"
         batches = []
         quantiled_intruder_sentences = self._get_quantiled_examples(record.test)
-        if self.type == "word":
-            # count words
-            non_active_counts = self._count_words(record.not_active)
-            quantiled_active_counts: dict[int, list[tuple[str, int]]] = {}
-            quantile_non_active_counts: dict[int, dict[str, int]] = {}
-            number_quantiles = len(quantiled_intruder_sentences)
-            for quantiles,examples in quantiled_intruder_sentences.items():
-                active_counts = self._count_words(examples)
 
-                # if not more than 3 examples skip
-                if len(active_counts) < 3:
-                    continue
-                # non active words can't be in the active words
-                exclusive_non_active_counts = {
-                    k: v for k, v in non_active_counts.items() if k not in active_counts
-                }
-                quantile_non_active_counts[quantiles] = exclusive_non_active_counts
-                chosen_active = sorted(
-                    active_counts.items(), key=lambda x: x[1], reverse=True
+        intruder_sentences = record.not_active
+        for i, intruder in enumerate(intruder_sentences):
+            # select each quantile equally
+            quantile_index = i % len(quantiled_intruder_sentences.keys())
+
+            active_examples = quantiled_intruder_sentences[quantile_index]
+            # if there are more examples than the number of examples to show,
+            # sample which examples to show
+            examples_to_show = min(self.n_examples_shown - 1, len(active_examples))
+            example_indices = self.rng.sample(
+                range(len(active_examples)), examples_to_show
+            )
+            active_examples = [active_examples[i] for i in example_indices]
+
+            # convert the examples to strings
+
+            # highlights the active tokens
+            majority_examples = []
+            active_tokens = 0
+            for example in active_examples:
+                text, _ = _prepare_text(
+                    example, n_incorrect=0, threshold=0.3, highlighted=True
                 )
-                quantiled_active_counts[quantiles] = chosen_active
-            for quantiles,active_counts in quantiled_active_counts.items():
-                # for each quantile, do some intruder words
-                n_samples = len(record.not_active)//number_quantiles
-                non_active_samples = quantile_non_active_counts[quantiles]
-                n_samples = min(n_samples,len(non_active_samples))
-                
-                #randomly choose n_samples from non_active_samples
-                #TODO: do we also want it to be weighted by the count?
-                non_active_samples = self.rng.sample(list(non_active_samples.keys()),
-                                                     n_samples)
-
-                n_active_samples = min(len(active_counts),self.n_examples_shown-1)
-                
-                # Extract just the words from the (word, count) tuples in active_counts,
-                # discarding the count values
-                active_examples,active_counts = zip(*active_counts)
-                for intruder_word in non_active_samples:
-                    # choose the active words, with a frequency weighted by the count
-                    # without replacement
-                    examples_to_choose = list(active_examples).copy()
-                    counts_to_choose = list(active_counts).copy()
-                    chosen_examples = []
-                    for i in range(n_active_samples):
-                        chosen_index = self.rng.choices(range(len(examples_to_choose)),
-                                                        weights=counts_to_choose,
-                                                        k=1)[0]
-                        chosen_examples.append(examples_to_choose[chosen_index])
-                        examples_to_choose.pop(chosen_index)
-                        counts_to_choose.pop(chosen_index)
-
-                    # chose the index of the intruder
-                    intruder_index = self.rng.randint(0, n_active_samples- 1)
-                    # add the intruder to the examples
-                    examples = chosen_examples.copy()
-                    examples.insert(intruder_index, intruder_word)
-                    # create the sample
-                    batches.append(
-                        IntruderWord(
-                            examples=examples,
-                            intruder_index=intruder_index,
-                            chosen_quantile=quantiles,
-                        )
-                    )
-
-            
-        if self.type == "fuzzed":
-            intruder_sentences = record.not_active
-            for i, intruder in enumerate(intruder_sentences):
-                quantile_index = self.rng.randint(
-                    0, len(quantiled_intruder_sentences.keys()) - 1
-                )
-                active_examples = quantiled_intruder_sentences[quantile_index]
-                examples_to_show = min(self.n_examples_shown - 1, len(active_examples))
-                example_indices = self.rng.sample(
-                    range(len(active_examples)), examples_to_show
-                )
-                active_examples = [active_examples[i] for i in example_indices]
-
-                # convert the examples to strings
-                constructed_examples = []
-                intruder_index = self.rng.randint(0, examples_to_show)
-        
-                # highlights the active tokens
-                constructed_examples = []
-                active_tokens = 0
-                for example in active_examples:
-                    text, _ = _prepare_text(
-                        example, n_incorrect=0, threshold=0.3, highlighted=True
-                    )
-                    constructed_examples.append(text)
-                    active_tokens += (example.activations > 0).sum().item()
-                active_tokens = int(active_tokens / len(active_examples))
+                majority_examples.append(text)
+                active_tokens += (example.activations > 0).sum().item()
+            active_tokens = int(active_tokens / len(active_examples))
+            if self.type == "default":
                 # if example is contrastive, use the active tokens
                 # otherwise use the non-activating tokens
                 if intruder.activations.max() > 0:
@@ -266,35 +201,59 @@ class IntruderScorer(Classifier):
                     threshold=0.3,
                     highlighted=True,
                 )
-
-                constructed_examples.insert(intruder_index, intruder_sentence)
-                used_sentences = []
-                # TODO: have to do this instead of insert because of
-                # typing issues :(
-                activations = []
-                tokens = []
-                for i, example in enumerate(active_examples):
-                    if i == intruder_index:
-                        used_sentences.append(intruder)
-                        activations.append(intruder.activations.tolist())
-                        tokens.append(intruder.str_tokens)
-                        used_sentences.append(example)
-                        activations.append(example.activations.tolist())
-                        tokens.append(example.str_tokens)
-                    else:
-                        used_sentences.append(example)
-                        activations.append(example.activations.tolist())
-                        tokens.append(example.str_tokens)
-                batches.append(
-                    IntruderSentence(
-                        examples=constructed_examples,
-                        intruder_index=intruder_index,
-                        chosen_quantile=quantile_index,
-                        activations=activations,
-                        tokens=tokens,
-                        intruder_distance=intruder.distance,
-                    )
+            elif self.type == "internal":
+                # randomly select a quantile to be the intruder, make sure it's not
+                # the same as the source quantile
+                intruder_quantile_index = self.rng.randint(
+                    0, len(quantiled_intruder_sentences.keys()) - 1
                 )
+                while intruder_quantile_index == quantile_index:
+                    intruder_quantile_index = self.rng.randint(
+                        0, len(quantiled_intruder_sentences.keys()) - 1
+                    )
+                posible_intruder_sentences = quantiled_intruder_sentences[
+                    intruder_quantile_index
+                ]
+                intruder_index_selected = self.rng.randint(
+                    0, len(posible_intruder_sentences) - 1
+                )
+                intruder = posible_intruder_sentences[intruder_index_selected]
+                # here the examples are activating, so we have to convert them
+                # to non-activating examples
+                non_activating_intruder = NonActivatingExample(
+                    tokens=intruder.tokens,
+                    activations=intruder.activations,
+                    str_tokens=intruder.str_tokens,
+                    distance=intruder.quantile,
+                )
+                # we highlight the correct activating tokens though
+                intruder_sentence, _ = _prepare_text(
+                    non_activating_intruder,
+                    n_incorrect=0,
+                    threshold=0.3,
+                    highlighted=True,
+                )
+                intruder = non_activating_intruder
+
+            # select a random index to insert the intruder sentence
+            intruder_index = self.rng.randint(0, examples_to_show)
+            majority_examples.insert(intruder_index, intruder_sentence)
+
+            activations = [example.activations.tolist() for example in active_examples]
+            tokens = [example.str_tokens for example in active_examples]
+            activations.insert(intruder_index, intruder.activations.tolist())
+            tokens.insert(intruder_index, intruder.str_tokens)
+
+            batches.append(
+                IntruderSentence(
+                    examples=majority_examples,
+                    intruder_index=intruder_index,
+                    chosen_quantile=quantile_index,
+                    activations=activations,
+                    tokens=tokens,
+                    intruder_distance=intruder.distance,
+                )
+            )
 
         return batches
 
