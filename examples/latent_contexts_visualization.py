@@ -128,6 +128,7 @@ def tokens_and_activations_to_html(
     ]
     print(len(activations))
     print(len(toks))
+
     highlighted_text = []
     highlighted_text.append(
         """
@@ -136,13 +137,12 @@ def tokens_and_activations_to_html(
     )
     max_value = max([max(activ) for activ in activations])
     min_value = min([min(activ) for activ in activations])
-    if logit_diffs is not None and model_type != "reward_model":
-        logit_max_value = max([max(activ) for activ in logit_diffs])
-        logit_min_value = min([min(activ) for activ in logit_diffs])
 
     # Add color bar
     highlighted_text.append("Token Activations: " + make_colorbar(min_value, max_value))
     if logit_diffs is not None and model_type != "reward_model":
+        logit_max_value = max([max(activ) for activ in logit_diffs])
+        logit_min_value = min([min(activ) for activ in logit_diffs])
         highlighted_text.append('<div style="margin-top: 0.1em;"></div>')
         highlighted_text.append(
             "Logit Diff: " + make_colorbar(logit_min_value, logit_max_value)
@@ -161,7 +161,7 @@ def tokens_and_activations_to_html(
             if logit_diffs is not None and model_type != "reward_model":
                 logit_diffs_act = logit_diffs[seq_ind][act_ind]
                 _, logit_background_color = value_to_color(
-                    logit_diffs_act, logit_max_value, logit_min_value
+                    logit_diffs_act, logit_max_value, logit_min_value  # type: ignore
                 )
                 highlighted_text.append(
                     f'<div style="display: block; margin-right: {text_spacing}; height:'

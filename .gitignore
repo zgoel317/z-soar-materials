@@ -182,3 +182,5 @@ cython_debug/
 results/
 .vscode/
 statistics/
+.embedding_cache/
+wandb/

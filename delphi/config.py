@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from multiprocessing import cpu_count
 from typing import Literal
 
+import torch
 from simple_parsing import Serializable, field, list_field
 
 
@@ -25,6 +26,15 @@ class SamplerConfig(Serializable):
 
 @dataclass
 class ConstructorConfig(Serializable):
+    faiss_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    """Embedding model to use for FAISS index."""
+
+    faiss_embedding_cache_dir: str = ".embedding_cache"
+    """Directory to store cached embeddings for FAISS similarity search."""
+
+    faiss_embedding_cache_enabled: bool = True
+    """Whether to cache embeddings for FAISS similarity search."""
+
     example_ctx_len: int = 32
     """Length of each sampled example sequence. Longer sequences
     reduce detection scoring performance in weak models.
@@ -41,11 +51,12 @@ class ConstructorConfig(Serializable):
     n_non_activating: int = 50
     """Number of non-activating examples to be constructed."""
 
-    non_activating_source: Literal["random", "neighbours"] = "random"
+    non_activating_source: Literal["random", "neighbours", "FAISS"] = "random"
     """Source of non-activating examples. Random uses non-activating contexts
     sampled from any non activating window. Neighbours uses actvating contexts
-    from pre-computed latent neighbours. They are still non-activating but
-    have a higher chance of being similar to the activating examples."""
+    from pre-computed latent neighbours. FAISS uses semantic similarity search
+    to find hard negatives that are semantically similar to activating examples
+    but don't activate the latent."""
 
     neighbours_type: Literal[
         "co-occurrence", "decoder_similarity", "encoder_similarity"
@@ -143,7 +154,7 @@ class RunConfig(Serializable):
     """Number of processes to use for preprocessing data"""
 
     num_gpus: int = field(
-        default=1,
+        default=torch.cuda.device_count(),
     )
     """Number of GPUs to use for explanation and scoring."""
 
@@ -166,7 +177,7 @@ class RunConfig(Serializable):
 
     overwrite: list[Literal["cache", "neighbours", "scores"]] = list_field(
         choices=["cache", "neighbours", "scores"],
-        default=["scores"],
+        default=[],
     )
 
     """List of run stages to recompute. This is a debugging tool
