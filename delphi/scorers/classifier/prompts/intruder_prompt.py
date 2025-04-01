@@ -73,14 +73,18 @@ default = [
 
 default_cot = [
     {"role": "user", "content": DSCORER_EXAMPLE_ONE},
-    {"role": "assistant", "content": DSCORER_RESPONSE_ONE_COT+DSCORER_RESPONSE_ONE},
+    {"role": "assistant", "content": DSCORER_RESPONSE_ONE_COT + DSCORER_RESPONSE_ONE},
     {"role": "user", "content": DSCORER_EXAMPLE_TWO},
-    {"role": "assistant", "content": DSCORER_RESPONSE_TWO_COT+DSCORER_RESPONSE_TWO},
+    {"role": "assistant", "content": DSCORER_RESPONSE_TWO_COT + DSCORER_RESPONSE_TWO},
     {"role": "user", "content": DSCORER_EXAMPLE_THREE},
-    {"role": "assistant", "content": DSCORER_RESPONSE_THREE_COT+DSCORER_RESPONSE_THREE},
+    {
+        "role": "assistant",
+        "content": DSCORER_RESPONSE_THREE_COT + DSCORER_RESPONSE_THREE,
+    },
 ]
 
-def prompt(examples: str,cot:bool=False) -> list[dict]:
+
+def prompt(examples: str, cot: bool = False) -> list[dict]:
     generation_prompt = GENERATION_PROMPT.format(examples=examples)
 
     if cot:

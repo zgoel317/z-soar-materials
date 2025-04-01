@@ -504,17 +504,17 @@ def neighbour_non_activation_windows(
         examples_used = len(token_windows)
         all_examples.extend(
             prepare_non_activating_examples(
-                token_windows, 
-                token_activations, #activations of neighbour 
-                -neighbour.distance, 
-                tokenizer
+                token_windows,
+                token_activations,  # activations of neighbour
+                -neighbour.distance,
+                tokenizer,
             )
         )
         number_examples += examples_used
     if len(all_examples) == 0:
         print("No examples found, falling back to random non-activating examples")
         non_active_indices = not_active_mask.nonzero(as_tuple=False).squeeze()
-    
+
         return random_non_activating_windows(
             available_indices=non_active_indices,
             reshaped_tokens=reshaped_tokens,
@@ -561,7 +561,7 @@ def random_non_activating_windows(
 
     return prepare_non_activating_examples(
         toks,
-        torch.zeros_like(toks), #there is no way to define these activations
+        torch.zeros_like(toks),  # there is no way to define these activations
         -1.0,
         tokenizer,
     )

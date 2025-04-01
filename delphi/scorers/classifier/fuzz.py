@@ -50,6 +50,7 @@ class FuzzingScorer(Classifier, Scorer):
 
         self.threshold = threshold
         self.fuzz_type = fuzz_type
+
     def prompt(self, examples: str, explanation: str) -> list[dict]:
         return fuzz_prompt(examples, explanation)
 
@@ -62,18 +63,23 @@ class FuzzingScorer(Classifier, Scorer):
         ) / len(examples)
 
         return ceil(avg)
-    
-    def _convert_to_non_activating(self, examples: list[ActivatingExample]
-                                   ) -> list[NonActivatingExample]:
+
+    def _convert_to_non_activating(
+        self, examples: list[ActivatingExample]
+    ) -> list[NonActivatingExample]:
         """
         Convert a list of activating examples to a list of non-activating examples.
         """
-        return [NonActivatingExample(
-            tokens=example.tokens,
-            activations=example.activations,
-            str_tokens=example.str_tokens,
-            normalized_activations=example.normalized_activations,
-            distance=-1) for example in examples]
+        return [
+            NonActivatingExample(
+                tokens=example.tokens,
+                activations=example.activations,
+                str_tokens=example.str_tokens,
+                normalized_activations=example.normalized_activations,
+                distance=-1,
+            )
+            for example in examples
+        ]
 
     def _prepare(self, record: LatentRecord) -> list[Sample]:  # type: ignore
         """
@@ -81,7 +87,7 @@ class FuzzingScorer(Classifier, Scorer):
         """
         assert len(record.test) > 0, "No test records found"
 
-        n_incorrect = self.mean_n_activations_ceil(record.test) 
+        n_incorrect = self.mean_n_activations_ceil(record.test)
 
         if self.fuzz_type == "default":
             assert len(record.not_active) > 0, "No non-activating examples found"
@@ -94,7 +100,7 @@ class FuzzingScorer(Classifier, Scorer):
                     highlighted=True,
                 )
             else:
-            # if they don't we use randomly highlight n_incorrect tokens
+                # if they don't we use randomly highlight n_incorrect tokens
                 samples = examples_to_samples(
                     record.not_active,
                     n_incorrect=n_incorrect,
