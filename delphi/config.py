@@ -27,7 +27,6 @@ class SamplerConfig(Serializable):
     """Ratio of top examples to use for training, if using mix."""
 
 
-
 @dataclass
 class ConstructorConfig(Serializable):
     faiss_embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
