@@ -419,6 +419,7 @@ def faiss_non_activation_windows(
     # Create non-activating examples
     return prepare_non_activating_examples(
         selected_tokens,
+        torch.zeros_like(selected_tokens),
         -1.0,  # Using -1.0 as the distance since these are not neighbour-based
         tokenizer,
     )
