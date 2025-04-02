@@ -12,10 +12,11 @@ from .sample import _prepare_text
 
 
 @dataclass
-class IntruderSentence():
+class IntruderSentence:
     """
     A sample for an intruder sentence experiment.
     """
+
     examples: list[str]
     intruder_index: int
     chosen_quantile: int
