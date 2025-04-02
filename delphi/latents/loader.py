@@ -128,6 +128,7 @@ class LatentDataset:
         tokenizer: Optional[PreTrainedTokenizer | PreTrainedTokenizerFast] = None,
         modules: Optional[list[str]] = None,
         latents: Optional[dict[str, torch.Tensor]] = None,
+        neighbours_path: Optional[str] = None,
     ):
         """
         Initialize a LatentDataset.
@@ -146,7 +147,7 @@ class LatentDataset:
         self.buffers: list[TensorBuffer] = []
         self.all_data: dict[str, dict[int, ActivationData] | None] = {}
         self.tokens = None
-
+        self.neighbours_path = neighbours_path
         if modules is None:
             self.modules = os.listdir(raw_dir)
         else:
@@ -182,7 +183,10 @@ class LatentDataset:
         if self.constructor_cfg.non_activating_source == "neighbours":
             # path is always going to end with /latents
             split_path = raw_dir.split("/")[:-1]
-            neighbours_path = "/".join(split_path) + "/neighbours"
+            if self.neighbours_path is None:
+                neighbours_path = "/".join(split_path) + "/neighbours"
+            else:
+                neighbours_path = self.neighbours_path
             self.neighbours = self.load_neighbours(
                 neighbours_path, self.constructor_cfg.neighbours_type
             )
