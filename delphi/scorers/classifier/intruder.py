@@ -12,29 +12,13 @@ from .sample import _prepare_text
 
 
 @dataclass
-class IntruderSample:
-    """
-    A sample for an intruder experiment.
-    """
-
-    examples: list[str]
-    intruder_index: int
-    chosen_quantile: int
-
-
-@dataclass
-class IntruderWord(IntruderSample):
-    """
-    A sample for an intruder word experiment.
-    """
-
-
-@dataclass
-class IntruderSentence(IntruderSample):
+class IntruderSentence():
     """
     A sample for an intruder sentence experiment.
     """
-
+    examples: list[str]
+    intruder_index: int
+    chosen_quantile: int
     activations: list[list[float]]
     tokens: list[list[str]]
     intruder_distance: float
@@ -47,7 +31,7 @@ class IntruderResult:
     """
 
     interpretation: str = ""
-    sample: IntruderSample | None = None
+    sample: IntruderSentence | None = None
     prediction: int = 0
     correct_index: int = -1
     correct: bool = False
@@ -90,6 +74,8 @@ class IntruderScorer(Classifier):
             **generation_kwargs,
         )
         self.type = type
+        if type not in ["default", "internal"]:
+            raise ValueError("Type must be either 'default' or 'internal'")
         self.cot = cot
 
     def prompt(self, examples: str) -> list[dict]:
@@ -153,7 +139,7 @@ class IntruderScorer(Classifier):
             quantiles[example.quantile].append(example)
         return quantiles
 
-    def _prepare_and_batch(self, record: LatentRecord) -> list[IntruderSample]:
+    def _prepare_and_batch(self, record: LatentRecord) -> list[IntruderSentence]:
         """
         Prepare and shuffle a list of samples for classification.
         """
@@ -259,7 +245,7 @@ class IntruderScorer(Classifier):
 
     async def _query(
         self,
-        samples: list[IntruderSample],
+        samples: list[IntruderSentence],
     ) -> list[IntruderResult]:
         """
         Send and gather batches of samples to the model.
@@ -278,7 +264,7 @@ class IntruderScorer(Classifier):
 
     def _build_prompt(
         self,
-        sample: IntruderSample,
+        sample: IntruderSentence,
     ) -> list[dict]:
         """
         Prepare prompt for generation.
@@ -313,7 +299,7 @@ class IntruderScorer(Classifier):
             raise ValueError("Response is out of range")
         return interpretation, prediction
 
-    async def _generate(self, sample: IntruderSample) -> IntruderResult:
+    async def _generate(self, sample: IntruderSentence) -> IntruderResult:
         """
         Generate predictions for a batch of samples.
         """
