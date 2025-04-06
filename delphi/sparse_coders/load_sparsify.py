@@ -16,7 +16,7 @@ class PotentiallyWrappedSparseCoder(Protocol):
 
     def to(
         self,
-        device: Optional[Union[int, torch.device]] = None,
+        device: Optional[Union[str, torch.device]] = None,
         dtype: Optional[torch.dtype] = None,
     ) -> torch.nn.Module: ...
 
