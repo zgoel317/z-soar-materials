@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
-from typing import Optional, Protocol, Union, runtime_checkable
+from typing import Optional, Protocol, Union
 
 import torch
 import torch._dynamo.eval_frame
@@ -11,12 +11,13 @@ from torch import Tensor
 from transformers import PreTrainedModel
 
 
-@runtime_checkable
 class PotentiallyWrappedSparseCoder(Protocol):
     def encode(self, x: Tensor) -> EncoderOutput: ...
 
-    def cuda(
-        self, device: Optional[Union[int, torch.device]] = None
+    def to(
+        self,
+        device: Optional[Union[int, torch.device]] = None,
+        dtype: Optional[torch.dtype] = None,
     ) -> torch.nn.Module: ...
 
     cfg: SparseCoderConfig
