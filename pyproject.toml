@@ -23,15 +23,21 @@ dependencies = [
     "vllm",
     "aiofiles",
     "sentence_transformers",
-    "anyio>=4.8.0"
+    "anyio>=4.8.0",
+    "faiss-cpu"
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-beartype", "pytest-asyncio", "setuptools", "pre-commit"]
+dev = [
+    "pytest",
+    "pyright==1.1.378"
+    "pytest-beartype", "pytest-asyncio", "setuptools", "pre-commit"
+]
 visualize = [
     "kaleido==0.2.1",
     "plotly>=5.0.0rc2",
-    "pandas"
+    "pandas",
+    "ipywidgets"
 ]
 
 [tool.pyright]
