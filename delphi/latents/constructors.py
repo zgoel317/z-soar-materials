@@ -7,7 +7,6 @@ import faiss
 import numpy as np
 import torch
 from jaxtyping import Bool, Float, Int
-from jaxtyping import Float
 from sentence_transformers import SentenceTransformer
 from torch import Tensor
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
