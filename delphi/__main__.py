@@ -235,6 +235,13 @@ async def process_cache(
         scorer_pipe,
     )
 
+    if run_cfg.pipeline_num_proc > 1 and run_cfg.explainer_provider == "openrouter":
+        print(
+            "OpenRouter does not support multiprocessing,"
+            " setting pipeline_num_proc to 1"
+        )
+        run_cfg.pipeline_num_proc = 1
+
     await pipeline.run(run_cfg.pipeline_num_proc)
 
 

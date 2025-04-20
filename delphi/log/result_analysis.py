@@ -4,6 +4,7 @@ import numpy as np
 import orjson
 import pandas as pd
 import torch
+from sklearn.metrics import roc_auc_score
 from torch import Tensor
 
 
@@ -33,6 +34,7 @@ def latent_balanced_score_metrics(
         "f1_score": np.average(df["f1_score"], weights=weights),
         "precision": np.average(df["precision"], weights=weights),
         "recall": np.average(df["recall"], weights=weights),
+        "auc": np.average(df["auc"], weights=weights),
         "false_positives": np.average(df["false_positives"], weights=weights),
         "false_negatives": np.average(df["false_negatives"], weights=weights),
         "true_positives": np.average(df["true_positives"], weights=weights),
@@ -53,6 +55,7 @@ def latent_balanced_score_metrics(
         print(f"F1 Score: {metrics['f1_score']:.3f}")
         print(f"Precision: {metrics['precision']:.3f}")
         print(f"Recall: {metrics['recall']:.3f}")
+        print(f"AUC: {metrics['auc']:.3f}")
 
         fractions_failed = [
             failed_count / (total_examples + failed_count)
@@ -111,11 +114,11 @@ def parse_score_file(file_path):
     total_positives = (df["activating"]).sum()
     total_negatives = (~df["activating"]).sum()
 
-    # Calculate confusion matrix elements
-    true_positives = ((df["prediction"] == 1) & (df["activating"])).sum()
-    true_negatives = ((df["prediction"] == 0) & (~df["activating"])).sum()
-    false_positives = ((df["prediction"] == 1) & (~df["activating"])).sum()
-    false_negatives = ((df["prediction"] == 0) & (df["activating"])).sum()
+    # Calculate confusion matrix elements using a threshold of 0.5
+    true_positives = ((df["prediction"] >= 0.5) & (df["activating"])).sum()
+    true_negatives = ((df["prediction"] < 0.5) & (~df["activating"])).sum()
+    false_positives = ((df["prediction"] >= 0.5) & (~df["activating"])).sum()
+    false_negatives = ((df["prediction"] < 0.5) & (df["activating"])).sum()
 
     # Calculate rates
     true_positive_rate = true_positives / total_positives if total_positives > 0 else 0
@@ -127,7 +130,7 @@ def parse_score_file(file_path):
         false_negatives / total_positives if total_positives > 0 else 0
     )
 
-    # Calculate precision, recall, f1 (using sklearn for verification)
+    # Calculate precision, recall, F1, and accuracy
     precision = (
         true_positives / (true_positives + false_positives)
         if (true_positives + false_positives) > 0
@@ -139,11 +142,15 @@ def parse_score_file(file_path):
         if (precision + recall) > 0
         else 0
     )
-
-    # Calculate accuracy
     accuracy = (
         (true_positives + true_negatives) / total_examples if total_examples > 0 else 0
     )
+
+    # Calculate ROC AUC score
+    try:
+        auc = roc_auc_score(df["activating"], df["prediction"])
+    except Exception:
+        auc = 0.5
 
     # Add metrics to first row
     metrics = {
@@ -159,6 +166,7 @@ def parse_score_file(file_path):
         "recall": recall,
         "f1_score": f1_score,
         "accuracy": accuracy,
+        "auc": auc,
         "total_examples": total_examples,
         "total_positives": total_positives,
         "total_negatives": total_negatives,
@@ -189,6 +197,7 @@ def build_scores_df(
         "precision",
         "recall",
         "f1_score",
+        "auc",
         "true_positives",
         "true_negatives",
         "false_positives",
@@ -238,6 +247,8 @@ def build_scores_df(
                 df_data["latent_idx"].append(latent_idx)
                 df_data["firing_counts"].append(
                     hookpoint_firing_counts[module][latent_idx].item()
+                    if module in hookpoint_firing_counts
+                    else -1
                 )
                 df_data["module"].append(module)
                 for col in metrics_cols:
@@ -268,7 +279,9 @@ def plot_line(df: pd.DataFrame, visualize_path: Path):
 
 def log_results(scores_path: Path, visualize_path: Path, target_modules: list[str]):
     log_path = scores_path.parent / "log" / "hookpoint_firing_counts.pt"
-    hookpoint_firing_counts: dict[str, Tensor] = torch.load(log_path, weights_only=True)
+    hookpoint_firing_counts: dict[str, Tensor] = (
+        torch.load(log_path, weights_only=True) if log_path.exists() else {}
+    )
     df = build_scores_df(scores_path, target_modules, hookpoint_firing_counts)
 
     # Calculate the number of dead features for each module which will not be in the df
@@ -276,6 +289,7 @@ def log_results(scores_path: Path, visualize_path: Path, target_modules: list[st
         [
             (hookpoint_firing_counts[module] == 0).sum().item()
             for module in target_modules
+            if module in hookpoint_firing_counts
         ]
     )
     print(f"Number of dead features: {num_dead_features}")

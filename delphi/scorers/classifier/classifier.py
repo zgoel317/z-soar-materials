@@ -96,7 +96,7 @@ class Classifier(Scorer):
         try:
             response = await self.client.generate(prompt, **self.generation_kwargs)
         except Exception as e:
-            logger.error(f"Error generating text: {e}")
+            logger.error(f"Error generating text: {repr(e)}")
             response = None
         if response is None:
             predictions = [None] * self.n_examples_shown
@@ -107,8 +107,8 @@ class Classifier(Scorer):
             logprobs = response.logprobs if self.log_prob else None
             try:
                 predictions, probabilities = self._parse(selections, logprobs)
-            except Exception:
-                logger.error("Parsing selections failed:\n" + traceback.format_exc())
+            except Exception as e:
+                logger.error(f"Parsing selections failed: {repr(e)}")
                 predictions = [None] * self.n_examples_shown
                 probabilities = [None] * self.n_examples_shown
 

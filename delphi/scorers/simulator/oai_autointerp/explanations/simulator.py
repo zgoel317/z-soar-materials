@@ -264,7 +264,7 @@ class ExplanationNeuronSimulator(NeuronSimulator):
             logger.debug("result in score_explanation_by_activations is %s", result)
             return result
         except Exception as e:
-            logger.error(f"Simulation response parsing failed: {e}")
+            logger.error(f"Simulation response parsing failed: {repr(e)}")
             return SequenceSimulation(
                 tokens=list(tokens),
                 expected_activations=[0] * len(tokens),

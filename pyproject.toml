@@ -12,7 +12,7 @@ keywords = ["interpretability", "explainable-ai"]
 dependencies = [
     "datasets",
     "orjson",
-    "sparsify@git+https://github.com/EleutherAI/sparsify",
+    "eai-sparsify",
     "safetensors",
     "simple_parsing",
     "jaxtyping",

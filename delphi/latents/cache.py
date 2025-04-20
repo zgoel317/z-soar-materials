@@ -477,7 +477,8 @@ def generate_statistics_cache(
     # torch always sorts for unique, so we might as well do it
     sorted_latents, latent_indices = latents.sort()
     sorted_activations = activations[latent_indices]
-    sorted_tokens = tokens[latent_locations[latent_indices]]
+    locations = latent_locations[latent_indices]
+    sorted_tokens = tokens[locations[:, 0], locations[:, 1]]
 
     unique_latents, counts = torch.unique_consecutive(
         sorted_latents, return_counts=True

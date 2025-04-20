@@ -98,7 +98,8 @@ def test_retrieve_autoencoders_from_sparsify(dummy_model, run_cfg_sparsify):
             _ = autoencoder(dummy_input)
         except Exception as e:
             pytest.fail(
-                f"Autoencoder '{key}' from the Sparsify branch failed when called: {e}"
+                f"Autoencoder '{key}' from the Sparsify branch failed when called:"
+                f"\n{repr(e)}"
             )
         # Optionally, further tests can check output shapes or values.
 
@@ -123,5 +124,6 @@ def test_retrieve_autoencoders_from_gemma(dummy_model, run_cfg_gemma):
             _ = autoencoder(dummy_input)
         except Exception as e:
             pytest.fail(
-                f"Autoencoder '{key}' from the Gemma branch failed when called: {e}"
+                f"Autoencoder '{key}' from the Gemma branch failed when called:"
+                f"\n{repr(e)}"
             )
