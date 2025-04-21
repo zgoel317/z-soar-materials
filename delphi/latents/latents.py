@@ -147,7 +147,7 @@ class LatentRecord:
     """Extra examples to include in the record."""
 
     per_token_frequency: float = 0.0
-    """Frequency of the latent. Number of activations per token."""
+    """Frequency of the latent. Number of activations per total number of tokens."""
 
     per_context_frequency: float = 0.0
     """Frequency of the latent. Number of activations in a context per total
