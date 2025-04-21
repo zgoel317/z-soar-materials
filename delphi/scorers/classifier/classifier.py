@@ -3,11 +3,11 @@ import json
 import random
 import re
 from abc import abstractmethod
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
-from ...clients.client import Client
+from ...clients.client import Client, Response
 from ...latents import LatentRecord
 from ...logger import logger
 from ..scorer import Scorer, ScorerResult
@@ -97,25 +97,26 @@ class Classifier(Scorer):
         try:
             response = await self.client.generate(prompt, **self.generation_kwargs)
         except Exception as e:
-            logger.error(f"Error generating text: {e}")
+            logger.error(f"Error generating text: {repr(e)}")
             response = None
         if response is None:
             predictions = [None] * self.n_examples_shown
             probabilities = [None] * self.n_examples_shown
         else:
+            assert isinstance(response, Response)
             selections = response.text
             logprobs = response.logprobs if self.log_prob else None
             try:
                 predictions, probabilities = self._parse(selections, logprobs)
             except Exception as e:
-                logger.error(f"Parsing selections failed: {e}")
+                logger.error(f"Parsing selections failed: {repr(e)}")
                 predictions = [None] * self.n_examples_shown
                 probabilities = [None] * self.n_examples_shown
 
         results = []
         for sample, prediction, probability in zip(batch, predictions, probabilities):
             result = sample.data
-            result.prediction = prediction
+            result.prediction = bool(prediction) if prediction is not None else None
             if prediction is not None:
                 result.correct = prediction == result.activating
             else:
@@ -141,7 +142,7 @@ class Classifier(Scorer):
         match = re.search(pattern, string)
         if match is None:
             raise ValueError("No match found in string")
-        predictions: list[bool] = json.loads(match.group(0))
+        predictions: list[bool | Literal[0, 1]] = json.loads(match.group(0))
         assert len(predictions) == self.n_examples_shown
         probabilities = (
             self._parse_logprobs(logprobs)

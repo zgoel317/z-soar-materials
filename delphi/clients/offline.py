@@ -75,7 +75,11 @@ class Offline(Client):
             self.statistics_path = Path("statistics")
             self.statistics_path.mkdir(parents=True, exist_ok=True)
 
-    async def process_func(self, batches: Union[str, list[dict[str, str]]], kwargs):
+    async def process_func(
+        self,
+        batches: Union[str, list[Union[dict[str, str], list[dict[str, str]]]]],
+        kwargs,
+    ):
         """
         Process a single request.
         """
@@ -143,7 +147,9 @@ class Offline(Client):
             )
         return new_response
 
-    async def generate(self, prompt: Union[str, list[dict[str, str]]], **kwargs) -> str:  # type: ignore
+    async def generate(
+        self, prompt: Union[str, list[dict[str, str]]], **kwargs
+    ) -> Response:  # type: ignore
         """
         Enqueue a request and wait for the result.
         """
@@ -223,7 +229,7 @@ class Offline(Client):
                     if not future.done():
                         future.set_result(result)
             except Exception as e:
-                logger.error(f"Batch processing failed: {e}")
+                logger.error(f"Batch processing failed: {repr(e)}")
                 for future in batch_futures:
                     if not future.done():
                         future.set_exception(e)

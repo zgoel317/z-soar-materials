@@ -55,7 +55,12 @@ def load_artifacts(run_cfg: RunConfig):
         compile=True,
     )
 
-    return run_cfg.hookpoints, hookpoint_to_sparse_encode, model, transcode
+    return (
+        list(hookpoint_to_sparse_encode.keys()),
+        hookpoint_to_sparse_encode,
+        model,
+        transcode,
+    )
 
 
 def create_neighbours(
@@ -86,12 +91,12 @@ def create_neighbours(
         elif constructor_cfg.neighbours_type == "decoder_similarity":
 
             neighbour_calculator = NeighbourCalculator(
-                autoencoder=saes[hookpoint].cuda(), number_of_neighbours=250
+                autoencoder=saes[hookpoint].to("cuda"), number_of_neighbours=250
             )
 
         elif constructor_cfg.neighbours_type == "encoder_similarity":
             neighbour_calculator = NeighbourCalculator(
-                autoencoder=saes[hookpoint].cuda(), number_of_neighbours=250
+                autoencoder=saes[hookpoint].to("cuda"), number_of_neighbours=250
             )
         else:
             raise ValueError(
@@ -131,7 +136,7 @@ async def process_cache(
         }  # The latent range to explain
 
     dataset = LatentDataset(
-        raw_dir=str(latents_path),
+        raw_dir=latents_path,
         sampler_cfg=run_cfg.sampler_cfg,
         constructor_cfg=run_cfg.constructor_cfg,
         modules=hookpoints,
@@ -212,7 +217,7 @@ async def process_cache(
                 client,
                 n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
                 verbose=run_cfg.verbose,
-                log_prob=False,
+                log_prob=run_cfg.log_probs,
             ),
             preprocess=scorer_preprocess,
             postprocess=partial(scorer_postprocess, score_dir=detection_scores_path),
@@ -222,7 +227,7 @@ async def process_cache(
                 client,
                 n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
                 verbose=run_cfg.verbose,
-                log_prob=False,
+                log_prob=run_cfg.log_probs,
             ),
             preprocess=scorer_preprocess,
             postprocess=partial(scorer_postprocess, score_dir=fuzz_scores_path),
@@ -234,6 +239,13 @@ async def process_cache(
         explainer_pipe,
         scorer_pipe,
     )
+
+    if run_cfg.pipeline_num_proc > 1 and run_cfg.explainer_provider == "openrouter":
+        print(
+            "OpenRouter does not support multiprocessing,"
+            " setting pipeline_num_proc to 1"
+        )
+        run_cfg.pipeline_num_proc = 1
 
     await pipeline.run(run_cfg.pipeline_num_proc)
 

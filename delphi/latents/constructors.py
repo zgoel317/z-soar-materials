@@ -6,7 +6,7 @@ from typing import Optional
 import faiss
 import numpy as np
 import torch
-from jaxtyping import Float
+from jaxtyping import Bool, Float, Int
 from sentence_transformers import SentenceTransformer
 from torch import Tensor
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast
@@ -31,7 +31,7 @@ def get_model(name: str, device: str = "cuda") -> SentenceTransformer:
 
 
 def prepare_non_activating_examples(
-    tokens: Float[Tensor, "examples ctx_len"],
+    tokens: Int[Tensor, "examples ctx_len"],
     activations: Float[Tensor, "examples ctx_len"],
     distance: float,
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
@@ -58,14 +58,14 @@ def prepare_non_activating_examples(
 def _top_k_pools(
     max_buffer: Float[Tensor, "batch"],
     split_activations: Float[Tensor, "activations ctx_len"],
-    buffer_tokens: Float[Tensor, "batch ctx_len"],
+    buffer_tokens: Int[Tensor, "batch ctx_len"],
     max_examples: int,
-) -> tuple[Float[Tensor, "examples ctx_len"], Float[Tensor, "examples ctx_len"]]:
+) -> tuple[Int[Tensor, "examples ctx_len"], Float[Tensor, "examples ctx_len"]]:
     """
     Get the top k activation pools.
 
     Args:
-        max_buffer: The maximum buffer values.
+        max_buffer: The maxima of each context window's activations.
         split_activations: The split activations.
         buffer_tokens: The buffer tokens.
         max_examples: The maximum number of examples.
@@ -84,12 +84,12 @@ def _top_k_pools(
 
 def pool_max_activation_windows(
     activations: Float[Tensor, "examples"],
-    tokens: Float[Tensor, "windows seq"],
-    ctx_indices: Float[Tensor, "examples"],
-    index_within_ctx: Float[Tensor, "examples"],
+    tokens: Int[Tensor, "windows seq"],
+    ctx_indices: Int[Tensor, "examples"],
+    index_within_ctx: Int[Tensor, "examples"],
     ctx_len: int,
     max_examples: int,
-) -> tuple[Float[Tensor, "examples ctx_len"], Float[Tensor, "examples ctx_len"]]:
+) -> tuple[Int[Tensor, "examples ctx_len"], Float[Tensor, "examples ctx_len"]]:
     """
     Pool max activation windows from the buffer output and update the latent record.
 
@@ -100,6 +100,8 @@ def pool_max_activation_windows(
         index_within_ctx : The index within the context.
         ctx_len : The context length.
         max_examples : The maximum number of examples.
+    Returns:
+        The token windows and activation windows.
     """
     # unique_ctx_indices: array of distinct context window indices in order of first
     # appearance. sequential integers from 0 to batch_size * cache_token_length//ctx_len
@@ -178,7 +180,6 @@ def pool_centered_activation_windows(
     mask = not_first_position & not_last_position
     unique_ctx_indices = unique_ctx_indices[mask]
     temp_tensor = temp_tensor[mask]
-
     if len(unique_ctx_indices) == 0:
         return torch.zeros(0, ctx_len), torch.zeros(0, ctx_len)
 
@@ -237,7 +238,7 @@ def constructor(
     record: LatentRecord,
     activation_data: ActivationData,
     constructor_cfg: ConstructorConfig,
-    tokens: Float[Tensor, "batch seq"],
+    tokens: Int[Tensor, "batch seq"],
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     all_data: Optional[dict[int, ActivationData]] = None,
     seed: int = 42,
@@ -255,7 +256,7 @@ def constructor(
     )
     ctx_indices = flat_indices // example_ctx_len
     index_within_ctx = flat_indices % example_ctx_len
-    n_windows_per_batch = tokens.shape[0] // example_ctx_len
+    n_windows_per_batch = tokens.shape[1] // example_ctx_len
     reshaped_tokens = tokens.reshape(-1, example_ctx_len)
     n_windows = reshaped_tokens.shape[0]
     unique_batch_pos = ctx_indices.unique()
@@ -464,7 +465,7 @@ def faiss_non_activation_windows(
             index = faiss.read_index(str(non_activating_cache_file), faiss.IO_FLAG_MMAP)
             print(f"Loaded non-activating index from {non_activating_cache_file}")
         except Exception as e:
-            print(f"Error loading cached embeddings: {e}")
+            print(f"Error loading cached embeddings: {repr(e)}")
 
     if index is None:
         print("Decoding non-activating tokens...")
@@ -491,7 +492,7 @@ def faiss_non_activation_windows(
             activating_embeddings = np.load(activating_cache_file)
             print(f"Loaded cached activating embeddings from {activating_cache_file}")
         except Exception as e:
-            print(f"Error loading cached embeddings: {e}")
+            print(f"Error loading cached embeddings: {repr(e)}")
     # Compute embeddings for activating examples if not cached
     if activating_embeddings is None:
         print("Computing activating embeddings...")
@@ -539,8 +540,8 @@ def faiss_non_activation_windows(
 
 def neighbour_non_activation_windows(
     record: LatentRecord,
-    not_active_mask: Float[Tensor, "windows"],
-    tokens: Float[Tensor, "batch seq"],
+    not_active_mask: Bool[Tensor, "windows"],
+    tokens: Int[Tensor, "batch seq"],
     all_data: dict[int, ActivationData],
     ctx_len: int,
     n_not_active: int,
@@ -641,8 +642,8 @@ def neighbour_non_activation_windows(
 
 
 def random_non_activating_windows(
-    available_indices: Float[Tensor, "windows"],
-    reshaped_tokens: Float[Tensor, "windows ctx_len"],
+    available_indices: Int[Tensor, "windows"],
+    reshaped_tokens: Int[Tensor, "windows ctx_len"],
     n_not_active: int,
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     seed: int = 42,
