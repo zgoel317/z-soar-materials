@@ -27,9 +27,9 @@ def compute_auc(df: pd.DataFrame) -> float | None:
     if not df.probability.nunique():
         return None
 
-    df = df[df.probability.notna()]
+    valid_df = df[df.probability.notna()]
 
-    return roc_auc_score(df.activating, df.probability)  # type: ignore
+    return roc_auc_score(valid_df.activating, valid_df.probability)  # type: ignore
 
 
 def plot_accuracy_hist(df: pd.DataFrame, out_dir: Path):
@@ -49,10 +49,10 @@ def plot_roc_curve(df: pd.DataFrame, out_dir: Path):
         return
 
     # filter out NANs
-    df = df[df.probability.notna()]
+    valid_df = df[df.probability.notna()]
 
-    fpr, tpr, _ = roc_curve(df.activating, df.probability)
-    auc = roc_auc_score(df.activating, df.probability)
+    fpr, tpr, _ = roc_curve(valid_df.activating, valid_df.probability)
+    auc = roc_auc_score(valid_df.activating, valid_df.probability)
     fig = go.Figure(
         data=[
             go.Scatter(x=fpr, y=tpr, mode="lines", name=f"ROC (AUC={auc:.3f})"),
@@ -173,6 +173,19 @@ def load_data(scores_path: Path, modules: list[str]):
     return pd.concat(latent_dfs, ignore_index=True), counts
 
 
+def get_metrics(latent_df: pd.DataFrame) -> pd.DataFrame:
+    processed_rows = []
+    for score_type, group_df in latent_df.groupby("score_type"):
+        conf = compute_confusion(group_df)
+        class_m = compute_classification_metrics(conf)
+        auc = compute_auc(group_df)
+
+        row = {"score_type": score_type, **conf, **class_m, "auc": auc}
+        processed_rows.append(row)
+
+    return pd.DataFrame(processed_rows)
+
+
 def log_results(scores_path: Path, viz_path: Path, modules: list[str]):
     import_plotly()
 
@@ -187,17 +200,7 @@ def log_results(scores_path: Path, viz_path: Path, modules: list[str]):
 
     plot_roc_curve(latent_df, viz_path)
 
-    # Produce statistics averaged over layers and latents
-    processed_rows = []
-    for score_type, group_df in latent_df.groupby("score_type"):
-        conf = compute_confusion(group_df)
-        class_m = compute_classification_metrics(conf)
-        auc = compute_auc(group_df)
-
-        row = {"score_type": score_type, **conf, **class_m, "auc": auc}
-        processed_rows.append(row)
-
-    processed_df = pd.DataFrame(processed_rows)
+    processed_df = get_metrics(latent_df)
 
     plot_accuracy_hist(processed_df, viz_path)
 

@@ -1,0 +1,11 @@
+{
+    "include": ["delphi"],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__"
+    ],
+    "reportMissingImports": "none",
+    "reportMissingModuleSource": "none",
+    "pythonVersion": "3.10",
+    "typeCheckingMode": "basic"
+}

@@ -10,7 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 keywords = ["interpretability", "explainable-ai"]
 dependencies = [
+    "torch",
     "datasets",
+    "transformers",
     "orjson",
     "eai-sparsify",
     "safetensors",
