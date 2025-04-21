@@ -6,7 +6,7 @@ import torch
 
 from delphi.__main__ import run
 from delphi.config import CacheConfig, ConstructorConfig, RunConfig, SamplerConfig
-from delphi.log.result_analysis import get_metrics, load_data
+from delphi.log.result_analysis import build_scores_df, latent_balanced_score_metrics
 
 
 async def test():
@@ -58,14 +58,21 @@ async def test():
     end_time = time.time()
     print(f"Time taken: {end_time - start_time} seconds")
 
-    scores_path = Path.cwd() / "results" / run_cfg.name / "scores"
-
-    latent_df, _ = load_data(scores_path, run_cfg.hookpoints)
-    processed_df = get_metrics(latent_df)
-
     # Performs better than random guessing
-    for score_type, df in processed_df.groupby("score_type"):
-        accuracy = df["accuracy"].mean()
+    scores_path = Path.cwd() / "results" / run_cfg.name / "scores"
+    hookpoint_firing_counts = torch.load(
+        Path.cwd() / "results" / run_cfg.name / "log" / "hookpoint_firing_counts.pt",
+        weights_only=True,
+    )
+    df = build_scores_df(scores_path, run_cfg.hookpoints, hookpoint_firing_counts)
+    for score_type in df["score_type"].unique():
+        score_df = df.query(f"score_type == '{score_type}'")
+
+        weighted_mean_metrics = latent_balanced_score_metrics(
+            score_df, score_type, verbose=False
+        )
+
+        accuracy = weighted_mean_metrics["accuracy"]
         assert accuracy > 0.55, f"Score type {score_type} has an accuracy of {accuracy}"
 
 
