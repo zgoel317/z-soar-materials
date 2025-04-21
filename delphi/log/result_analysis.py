@@ -1,14 +1,15 @@
 from pathlib import Path
 
-import numpy as np
 import orjson
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import torch
-from sklearn.metrics import roc_auc_score
-from torch import Tensor
+from sklearn.metrics import roc_auc_score, roc_curve
 
 
 def import_plotly():
+    """Import plotly with mitigiation for MathJax bug."""
     try:
         import plotly.express as px  # type: ignore
         import plotly.io as pio  # type: ignore
@@ -22,280 +23,233 @@ def import_plotly():
     return px
 
 
-def latent_balanced_score_metrics(
-    df: pd.DataFrame, score_type: str, verbose: bool = True
-):
-    # Calculate weights based on non-errored examples
-    valid_examples = df["total_examples"]
-    weights = valid_examples / valid_examples.sum()
+def compute_auc(df: pd.DataFrame) -> float | None:
+    if not df.probability.nunique():
+        return None
 
-    metrics = {
-        "accuracy": np.average(df["accuracy"], weights=weights),
-        "f1_score": np.average(df["f1_score"], weights=weights),
-        "precision": np.average(df["precision"], weights=weights),
-        "recall": np.average(df["recall"], weights=weights),
-        "auc": np.average(df["auc"], weights=weights),
-        "false_positives": np.average(df["false_positives"], weights=weights),
-        "false_negatives": np.average(df["false_negatives"], weights=weights),
-        "true_positives": np.average(df["true_positives"], weights=weights),
-        "true_negatives": np.average(df["true_negatives"], weights=weights),
-        "positive_class_ratio": np.average(df["positive_class_ratio"], weights=weights),
-        "negative_class_ratio": np.average(df["negative_class_ratio"], weights=weights),
-        "total_positives": np.average(df["total_positives"], weights=weights),
-        "total_negatives": np.average(df["total_negatives"], weights=weights),
-        "true_positive_rate": np.average(df["true_positive_rate"], weights=weights),
-        "true_negative_rate": np.average(df["true_negative_rate"], weights=weights),
-        "false_positive_rate": np.average(df["false_positive_rate"], weights=weights),
-        "false_negative_rate": np.average(df["false_negative_rate"], weights=weights),
-    }
+    valid_df = df[df.probability.notna()]
 
-    if verbose:
+    return roc_auc_score(valid_df.activating, valid_df.probability)  # type: ignore
+
+
+def plot_accuracy_hist(df: pd.DataFrame, out_dir: Path):
+    out_dir.mkdir(exist_ok=True, parents=True)
+    for label in df["score_type"].unique():
+        fig = px.histogram(
+            df[df["score_type"] == label],
+            x="accuracy",
+            nbins=100,
+            title=f"Accuracy distribution: {label}",
+        )
+        fig.write_image(out_dir / f"{label}_accuracy.pdf")
+
+
+def plot_roc_curve(df: pd.DataFrame, out_dir: Path):
+    if not df.probability.nunique():
+        return
+
+    # filter out NANs
+    valid_df = df[df.probability.notna()]
+
+    fpr, tpr, _ = roc_curve(valid_df.activating, valid_df.probability)
+    auc = roc_auc_score(valid_df.activating, valid_df.probability)
+    fig = go.Figure(
+        data=[
+            go.Scatter(x=fpr, y=tpr, mode="lines", name=f"ROC (AUC={auc:.3f})"),
+            go.Scatter(x=[0, 1], y=[0, 1], mode="lines", line=dict(dash="dash")),
+        ]
+    )
+    fig.update_layout(
+        title="ROC Curve",
+        xaxis_title="FPR",
+        yaxis_title="TPR",
+    )
+    out_dir.mkdir(exist_ok=True, parents=True)
+    fig.write_image(out_dir / "roc_curve.pdf")
+
+
+def compute_confusion(df: pd.DataFrame, threshold: float = 0.5) -> dict:
+    df_valid = df[df["prediction"].notna()]
+    total = len(df_valid)
+    pos = df_valid.activating.sum()
+    neg = total - pos
+
+    tp = ((df_valid.prediction >= threshold) & df_valid.activating).sum()
+    tn = ((df_valid.prediction < threshold) & ~df_valid.activating).sum()
+    fp = ((df_valid.prediction >= threshold) & ~df_valid.activating).sum()
+    fn = ((df_valid.prediction < threshold) & df_valid.activating).sum()
+    return dict(
+        true_positives=tp,
+        true_negatives=tn,
+        false_positives=fp,
+        false_negatives=fn,
+        total_examples=total,
+        total_positives=pos,
+        total_negatives=neg,
+        failed_count=len(df_valid) - total,
+    )
+
+
+def compute_classification_metrics(conf: dict) -> dict:
+    tp = conf["true_positives"]
+    tn = conf["true_negatives"]
+    fp = conf["false_positives"]
+    fn = conf["false_negatives"]
+    total = conf["total_examples"]
+    pos = conf["total_positives"]
+    neg = conf["total_negatives"]
+
+    balanced_accuracy = (
+        (tp / pos if pos > 0 else 0) + (tn / neg if neg > 0 else 0)
+    ) / 2
+
+    precision = tp / (tp + fp) if tp + fp > 0 else 0
+    recall = tp / pos if pos > 0 else 0
+    f1 = (
+        2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
+    )
+    # accuracy = (tp + tn) / total if total > 0 else 0
+    return dict(
+        precision=precision,
+        recall=recall,
+        f1_score=f1,
+        accuracy=balanced_accuracy,
+        true_positive_rate=tp / pos if pos > 0 else 0,
+        true_negative_rate=tn / neg if neg > 0 else 0,
+        false_positive_rate=fp / neg if neg > 0 else 0,
+        false_negative_rate=fn / pos if pos > 0 else 0,
+        total_examples=total,
+        total_positives=pos,
+        total_negatives=neg,
+        positive_class_ratio=pos / total if total > 0 else 0,
+        negative_class_ratio=neg / total if total > 0 else 0,
+    )
+
+
+def load_data(scores_path: Path, modules: list[str]):
+    """Load all on-disk data into a single DataFrame."""
+
+    def parse_score_file(path: Path) -> pd.DataFrame:
+        """
+        Load a score file and return a raw DataFrame
+        """
+        data = orjson.loads(path.read_bytes())
+        latent_idx = int(path.stem.split("latent")[-1])
+
+        return pd.DataFrame(
+            [
+                {
+                    "text": "".join(ex["str_tokens"]),
+                    "distance": ex["distance"],
+                    "activating": ex["activating"],
+                    "prediction": ex["prediction"],
+                    "probability": ex["probability"],
+                    "correct": ex["correct"],
+                    "activations": ex["activations"],
+                    "latent_idx": latent_idx,
+                }
+                for ex in data
+            ]
+        )
+
+    counts_file = scores_path.parent / "log" / "hookpoint_firing_counts.pt"
+    counts = torch.load(counts_file) if counts_file.exists() else {}
+
+    # Collect per-latent data
+    latent_dfs = []
+    for score_type_dir in scores_path.iterdir():
+        if not score_type_dir.is_dir():
+            continue
+        for module in modules:
+            for file in score_type_dir.glob(f"*{module}*"):
+                latent_idx = int(file.stem.split("latent")[-1])
+
+                latent_df = parse_score_file(file)
+                latent_df["score_type"] = score_type_dir.name
+                latent_df["module"] = module
+                latent_df["latent_idx"] = latent_idx
+                latent_dfs.append(latent_df)
+
+    return pd.concat(latent_dfs, ignore_index=True), counts
+
+
+def get_metrics(latent_df: pd.DataFrame) -> pd.DataFrame:
+    processed_rows = []
+    for score_type, group_df in latent_df.groupby("score_type"):
+        conf = compute_confusion(group_df)
+        class_m = compute_classification_metrics(conf)
+        auc = compute_auc(group_df)
+
+        row = {"score_type": score_type, **conf, **class_m, "auc": auc}
+        processed_rows.append(row)
+
+    return pd.DataFrame(processed_rows)
+
+
+def log_results(scores_path: Path, viz_path: Path, modules: list[str]):
+    import_plotly()
+
+    latent_df, counts = load_data(scores_path, modules)
+
+    if latent_df.empty:
+        print("No data found")
+        return
+
+    dead = sum((counts[m] == 0).sum().item() for m in modules if m in counts)
+    print(f"Number of dead features: {dead}")
+
+    plot_roc_curve(latent_df, viz_path)
+
+    processed_df = get_metrics(latent_df)
+
+    plot_accuracy_hist(processed_df, viz_path)
+
+    for score_type in processed_df.score_type.unique():
+        score_type_summary = processed_df[processed_df.score_type == score_type].iloc[0]
         print(f"\n--- {score_type.title()} Metrics ---")
-        print(f"Accuracy: {metrics['accuracy']:.3f}")
-        print(f"F1 Score: {metrics['f1_score']:.3f}")
-        print(f"Precision: {metrics['precision']:.3f}")
-        print(f"Recall: {metrics['recall']:.3f}")
-        print(f"AUC: {metrics['auc']:.3f}")
+        print(f"Balanced Accuracy: {score_type_summary['accuracy']:.3f}")
+        print(f"F1 Score: {score_type_summary['f1_score']:.3f}")
+        print(f"Precision: {score_type_summary['precision']:.3f}")
+        print(f"Recall: {score_type_summary['recall']:.3f}")
+        # Only print AUC if unbalanced AUC is not -1.
+        if score_type_summary["auc"] is not None:
+            print(f"AUC: {score_type_summary['auc']:.3f}")
+        else:
+            print("Logits not available.")
 
         fractions_failed = [
-            failed_count / (total_examples + failed_count)
-            for failed_count, total_examples in zip(
-                df["failed_count"], df["total_examples"]
+            score_type_summary["failed_count"]
+            / (
+                (
+                    score_type_summary["total_examples"]
+                    + score_type_summary["failed_count"]
+                )
             )
         ]
         print(
             f"""Average fraction of failed examples: \
-{sum(fractions_failed) / len(fractions_failed):.3f}"""
+{sum(fractions_failed) / len(fractions_failed)}"""
         )
 
         print("\nConfusion Matrix:")
-        print(f"True Positive Rate:  {metrics['true_positive_rate']:.3f}")
-        print(f"True Negative Rate:  {metrics['true_negative_rate']:.3f}")
-        print(f"False Positive Rate: {metrics['false_positive_rate']:.3f}")
-        print(f"False Negative Rate: {metrics['false_negative_rate']:.3f}")
+        print(
+            f"True Positive Rate:  {score_type_summary['true_positive_rate']:.3f} "
+            f"({score_type_summary['true_positives'].sum()})"
+        )
+        print(
+            f"True Negative Rate:  {score_type_summary['true_negative_rate']:.3f} "
+            f"({score_type_summary['true_negatives'].sum()})"
+        )
+        print(
+            f"False Positive Rate: {score_type_summary['false_positive_rate']:.3f} "
+            f"({score_type_summary['false_positives'].sum()})"
+        )
+        print(
+            f"False Negative Rate: {score_type_summary['false_negative_rate']:.3f} "
+            f"({score_type_summary['false_negatives'].sum()})"
+        )
 
         print("\nClass Distribution:")
-        print(
-            f"""Positives: {df['total_positives'].sum():.0f} \
-({metrics['positive_class_ratio']:.1%})"""
-        )
-        print(
-            f"""Negatives: {df['total_negatives'].sum():.0f} \
-({metrics['negative_class_ratio']:.1%})"""
-        )
-        print(f"Total: {df['total_examples'].sum():.0f}")
-
-    return metrics
-
-
-def parse_score_file(file_path):
-    with open(file_path, "rb") as f:
-        data = orjson.loads(f.read())
-    df = pd.DataFrame(
-        [
-            {
-                "text": "".join(example["str_tokens"]),
-                "distance": example["distance"],
-                "activating": example["activating"],
-                "prediction": example["prediction"],
-                "probability": example["probability"],
-                "correct": example["correct"],
-                "activations": example["activations"],
-            }
-            for example in data
-        ]
-    )
-
-    # Calculate basic counts
-    failed_count = (df["prediction"].isna()).sum()
-    df = df[df["prediction"].notna()]
-    df.reset_index(drop=True, inplace=True)
-    total_examples = len(df)
-    total_positives = (df["activating"]).sum()
-    total_negatives = (~df["activating"]).sum()
-
-    # Calculate confusion matrix elements using a threshold of 0.5
-    true_positives = ((df["prediction"] >= 0.5) & (df["activating"])).sum()
-    true_negatives = ((df["prediction"] < 0.5) & (~df["activating"])).sum()
-    false_positives = ((df["prediction"] >= 0.5) & (~df["activating"])).sum()
-    false_negatives = ((df["prediction"] < 0.5) & (df["activating"])).sum()
-
-    # Calculate rates
-    true_positive_rate = true_positives / total_positives if total_positives > 0 else 0
-    true_negative_rate = true_negatives / total_negatives if total_negatives > 0 else 0
-    false_positive_rate = (
-        false_positives / total_negatives if total_negatives > 0 else 0
-    )
-    false_negative_rate = (
-        false_negatives / total_positives if total_positives > 0 else 0
-    )
-
-    # Calculate precision, recall, F1, and accuracy
-    precision = (
-        true_positives / (true_positives + false_positives)
-        if (true_positives + false_positives) > 0
-        else 0
-    )
-    recall = true_positive_rate  # Same as TPR
-    f1_score = (
-        2 * (precision * recall) / (precision + recall)
-        if (precision + recall) > 0
-        else 0
-    )
-    accuracy = (
-        (true_positives + true_negatives) / total_examples if total_examples > 0 else 0
-    )
-
-    # Calculate ROC AUC score
-    try:
-        auc = roc_auc_score(df["activating"], df["prediction"])
-    except Exception:
-        auc = 0.5
-
-    # Add metrics to first row
-    metrics = {
-        "true_positive_rate": true_positive_rate,
-        "true_negative_rate": true_negative_rate,
-        "false_positive_rate": false_positive_rate,
-        "false_negative_rate": false_negative_rate,
-        "true_positives": true_positives,
-        "true_negatives": true_negatives,
-        "false_positives": false_positives,
-        "false_negatives": false_negatives,
-        "precision": precision,
-        "recall": recall,
-        "f1_score": f1_score,
-        "accuracy": accuracy,
-        "auc": auc,
-        "total_examples": total_examples,
-        "total_positives": total_positives,
-        "total_negatives": total_negatives,
-        "positive_class_ratio": (
-            total_positives / total_examples if total_examples > 0 else 0
-        ),
-        "negative_class_ratio": (
-            total_negatives / total_examples if total_examples > 0 else 0
-        ),
-        "failed_count": failed_count,
-    }
-
-    for key, value in metrics.items():
-        df.loc[0, key] = value
-
-    return df
-
-
-def build_scores_df(
-    path: Path,
-    target_modules: list[str],
-    hookpoint_firing_counts: dict,
-    range: Tensor | None = None,
-):
-    metrics_cols = [
-        "accuracy",
-        "probability",
-        "precision",
-        "recall",
-        "f1_score",
-        "auc",
-        "true_positives",
-        "true_negatives",
-        "false_positives",
-        "false_negatives",
-        "true_positive_rate",
-        "true_negative_rate",
-        "false_positive_rate",
-        "false_negative_rate",
-        "total_examples",
-        "total_positives",
-        "total_negatives",
-        "positive_class_ratio",
-        "negative_class_ratio",
-        "failed_count",
-    ]
-    df_data = {
-        col: []
-        for col in [
-            "file_name",
-            "score_type",
-            "latent_idx",
-            "firing_counts",
-            "module",
-        ]
-        + metrics_cols
-    }
-
-    # Get subdirectories in the scores path
-    scores_types = [d.name for d in path.iterdir() if d.is_dir()]
-
-    for score_type in scores_types:
-        score_type_path = path / score_type
-
-        for module in target_modules:
-            for score_file in list(score_type_path.glob(f"*{module}*")) + list(
-                score_type_path.glob(f".*{module}*")
-            ):
-                latent_idx = int(score_file.stem.split("latent")[-1])
-                if range is not None and latent_idx not in range:
-                    continue
-
-                df = parse_score_file(score_file)
-
-                # Calculate the accuracy and cross entropy loss for this latent
-                df_data["file_name"].append(score_file.stem)
-                df_data["score_type"].append(score_type)
-                df_data["latent_idx"].append(latent_idx)
-                df_data["firing_counts"].append(
-                    hookpoint_firing_counts[module][latent_idx].item()
-                    if module in hookpoint_firing_counts
-                    else -1
-                )
-                df_data["module"].append(module)
-                for col in metrics_cols:
-                    df_data[col].append(df.loc[0, col])
-
-    df = pd.DataFrame(df_data)
-    assert not df.empty
-    return df
-
-
-def plot_line(df: pd.DataFrame, visualize_path: Path):
-    px = import_plotly()
-
-    visualize_path.mkdir(parents=True, exist_ok=True)
-
-    for score_type in df["score_type"].unique():
-        mask = df["score_type"] == score_type
-
-        fig = px.histogram(
-            df[mask],
-            x="accuracy",
-            title=f"Latent explanation accuracies for {score_type} scorer",
-            nbins=100,
-        )
-
-        fig.write_image(visualize_path / f"{score_type}_accuracies.pdf", format="pdf")
-
-
-def log_results(scores_path: Path, visualize_path: Path, target_modules: list[str]):
-    log_path = scores_path.parent / "log" / "hookpoint_firing_counts.pt"
-    hookpoint_firing_counts: dict[str, Tensor] = (
-        torch.load(log_path, weights_only=True) if log_path.exists() else {}
-    )
-    df = build_scores_df(scores_path, target_modules, hookpoint_firing_counts)
-
-    # Calculate the number of dead features for each module which will not be in the df
-    num_dead_features = sum(
-        [
-            (hookpoint_firing_counts[module] == 0).sum().item()
-            for module in target_modules
-            if module in hookpoint_firing_counts
-        ]
-    )
-    print(f"Number of dead features: {num_dead_features}")
-
-    plot_line(df, visualize_path)
-
-    for score_type in df["score_type"].unique():
-        score_df = df.query(f"score_type == '{score_type}'")
-        latent_balanced_score_metrics(score_df, score_type)
+        print(f"""Positives: {score_type_summary['total_positives'].sum():.0f}""")
+        print(f"""Negatives: {score_type_summary['total_negatives'].sum():.0f}""")
+        print(f"Total: {score_type_summary['total_examples'].sum():.0f}")
