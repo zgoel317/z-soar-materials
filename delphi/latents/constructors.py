@@ -269,24 +269,25 @@ def constructor(
     record.per_context_frequency = len(unique_batch_pos) / n_windows
 
     # Add activation examples to the record in place
-    # token_windows, act_windows = pool_max_activation_windows(
-    #     activations=activations,
-    #     tokens=reshaped_tokens,
-    #     ctx_indices=ctx_indices,
-    #     index_within_ctx=index_within_ctx,
-    #     ctx_len=example_ctx_len,
-    #     max_examples=max_examples,
-    # )
-
-    token_windows, act_windows = pool_centered_activation_windows(
-        activations=activations,
-        tokens=reshaped_tokens,
-        n_windows_per_batch=n_windows_per_batch,
-        ctx_indices=ctx_indices,
-        index_within_ctx=index_within_ctx,
-        ctx_len=example_ctx_len,
-        max_examples=max_examples,
-    )
+    if constructor_cfg.center_examples:
+        token_windows, act_windows = pool_max_activation_windows(
+            activations=activations,
+            tokens=reshaped_tokens,
+            ctx_indices=ctx_indices,
+            index_within_ctx=index_within_ctx,
+            ctx_len=example_ctx_len,
+            max_examples=max_examples,
+        )
+    else:
+        token_windows, act_windows = pool_centered_activation_windows(
+            activations=activations,
+            tokens=reshaped_tokens,
+            n_windows_per_batch=n_windows_per_batch,
+            ctx_indices=ctx_indices,
+            index_within_ctx=index_within_ctx,
+            ctx_len=example_ctx_len,
+            max_examples=max_examples,
+        )
     # TODO: We might want to do this in the sampler
     # we are tokenizing examples that are not going to be used
     record.examples = [
