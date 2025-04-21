@@ -17,11 +17,14 @@ class SamplerConfig(Serializable):
     n_quantiles: int = 10
     """Number of latent activation quantiles to sample."""
 
-    train_type: Literal["top", "random", "quantiles"] = "quantiles"
+    train_type: Literal["top", "random", "quantiles", "mix"] = "quantiles"
     """Type of sampler to use for latent explanation generation."""
 
     test_type: Literal["quantiles"] = "quantiles"
     """Type of sampler to use for latent explanation testing."""
+
+    ratio_top: float = 0.2
+    """Ratio of top examples to use for training, if using mix."""
 
 
 @dataclass
@@ -50,6 +53,12 @@ class ConstructorConfig(Serializable):
 
     n_non_activating: int = 50
     """Number of non-activating examples to be constructed."""
+
+    center_examples: bool = True
+    """Whether to center the examples on the latent activation.
+    If True, the examples will be centered on the latent activation.
+    Otherwise, windows will be used, and the activating example can be anywhere
+    window."""
 
     non_activating_source: Literal["random", "neighbours", "FAISS"] = "random"
     """Source of non-activating examples. Random uses non-activating contexts

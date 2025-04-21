@@ -127,6 +127,7 @@ class LatentDataset:
         tokenizer: Optional[PreTrainedTokenizer | PreTrainedTokenizerFast] = None,
         modules: Optional[list[str]] = None,
         latents: Optional[dict[str, torch.Tensor]] = None,
+        neighbours_path: Optional[os.PathLike] = None,
     ):
         """
         Initialize a LatentDataset.
@@ -145,7 +146,7 @@ class LatentDataset:
         self.buffers: list[TensorBuffer] = []
         self.all_data: dict[str, dict[int, ActivationData] | None] = {}
         self.tokens = None
-
+        self.neighbours_path = neighbours_path
         if modules is None:
             self.modules = os.listdir(raw_dir)
         else:
@@ -180,7 +181,10 @@ class LatentDataset:
 
         if self.constructor_cfg.non_activating_source == "neighbours":
             # path is always going to end with /latents
-            neighbours_path = Path(raw_dir).parent / "neighbours"
+            if self.neighbours_path is None:
+                neighbours_path = Path(raw_dir).parent / "neighbours"
+            else:
+                neighbours_path = Path(self.neighbours_path)
             self.neighbours = self.load_neighbours(
                 neighbours_path, self.constructor_cfg.neighbours_type
             )
@@ -395,11 +399,10 @@ class LatentDataset:
             activation_data=latent_data.activation_data,
             constructor_cfg=self.constructor_cfg,
             tokens=self.tokens,
-            all_data=self.all_data[latent_data.module],
             tokenizer=self.tokenizer,
+            all_data=self.all_data[latent_data.module],
         )
-        # Not enough examples to explain the latent
         if record is None:
             return None
-        record = sampler(record, self.sampler_cfg)
+        record = sampler(record, self.sampler_cfg, self.tokenizer)
         return record

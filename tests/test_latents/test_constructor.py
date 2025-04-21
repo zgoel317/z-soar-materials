@@ -113,6 +113,7 @@ def test_simple_cache(
             train_type=train_type,
             test_type="quantiles",
         ),
+        tokenizer=tokenizer,
     )
     assert len(record.train) <= n_examples
     assert len(record.test) <= n_examples
