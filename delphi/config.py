@@ -66,7 +66,7 @@ class ConstructorConfig(Serializable):
 
 @dataclass
 class CacheConfig(Serializable):
-    dataset_repo: str = "EleutherAI/fineweb-edu-dedup-10b"
+    dataset_repo: str = "EleutherAI/SmolLM2-135M-10B"
     """Dataset repository to use for generating latent activations."""
 
     dataset_split: str = "train[:1%]"
@@ -142,10 +142,15 @@ class RunConfig(Serializable):
     filter_bos: bool = False
     """Whether to filter out BOS tokens from the cache."""
 
+    log_probs: bool = False
+    """Whether to attempt to gather log probabilities for each scorer prompt."""
+
     load_in_8bit: bool = False
     """Load the model in 8-bit mode."""
 
-    hf_token: str | None = None
+    # Use a dummy encoding function to prevent the token from being saved
+    # to disk in plain text
+    hf_token: str | None = field(default=None, encoding_fn=lambda _: None)
     """Huggingface API token for downloading models."""
 
     pipeline_num_proc: int = field(

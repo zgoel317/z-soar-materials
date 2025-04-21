@@ -28,7 +28,8 @@ class OpenRouter(Client):
         self.headers = {"Authorization": f"Bearer {api_key}"}
 
         self.url = base_url
-        self.client = httpx.AsyncClient()
+        timeout_config = httpx.Timeout(5.0)
+        self.client = httpx.AsyncClient(timeout=timeout_config)
 
     def postprocess(self, response):
         response_json = response.json()
@@ -66,7 +67,7 @@ class OpenRouter(Client):
                 )
 
             except Exception as e:
-                logger.warning(f"Attempt {attempt + 1}: {str(e)}, retrying...")
+                logger.warning(f"Attempt {attempt + 1}: {repr(e)}, retrying...")
 
             await sleep(1)
 

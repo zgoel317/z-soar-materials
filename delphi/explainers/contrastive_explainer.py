@@ -66,7 +66,7 @@ class ContrastiveExplainer(Explainer):
         except Exception as e:
             from ..logger import logger
 
-            logger.error(f"Explanation parsing failed: {e}")
+            logger.error(f"Explanation parsing failed: {repr(e)}")
             return ExplainerResult(
                 record=record, explanation="Explanation could not be parsed."
             )

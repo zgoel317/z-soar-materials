@@ -222,7 +222,7 @@ class Offline(Client):
                     if not future.done():
                         future.set_result(result)
             except Exception as e:
-                logger.error(f"Batch processing failed: {e}")
+                logger.error(f"Batch processing failed: {repr(e)}")
                 for future in batch_futures:
                     if not future.done():
                         future.set_exception(e)

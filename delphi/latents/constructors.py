@@ -351,7 +351,7 @@ def faiss_non_activation_windows(
             index = faiss.read_index(str(non_activating_cache_file), faiss.IO_FLAG_MMAP)
             print(f"Loaded non-activating index from {non_activating_cache_file}")
         except Exception as e:
-            print(f"Error loading cached embeddings: {e}")
+            print(f"Error loading cached embeddings: {repr(e)}")
 
     if index is None:
         print("Decoding non-activating tokens...")
@@ -378,7 +378,7 @@ def faiss_non_activation_windows(
             activating_embeddings = np.load(activating_cache_file)
             print(f"Loaded cached activating embeddings from {activating_cache_file}")
         except Exception as e:
-            print(f"Error loading cached embeddings: {e}")
+            print(f"Error loading cached embeddings: {repr(e)}")
     # Compute embeddings for activating examples if not cached
     if activating_embeddings is None:
         print("Computing activating embeddings...")

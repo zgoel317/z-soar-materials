@@ -54,7 +54,7 @@ class Explainer(ABC):
 
             return ExplainerResult(record=record, explanation=explanation)
         except Exception as e:
-            logger.error(f"Explanation parsing failed: {e}")
+            logger.error(f"Explanation parsing failed: {repr(e)}")
             return ExplainerResult(
                 record=record, explanation="Explanation could not be parsed."
             )
@@ -67,7 +67,7 @@ class Explainer(ABC):
             else:
                 return "Explanation could not be parsed."
         except Exception as e:
-            logger.error(f"Explanation parsing regex failed: {e}")
+            logger.error(f"Explanation parsing regex failed: {repr(e)}")
             raise
 
     def _highlight(self, str_toks: list[str], activations: list[float]) -> str:
