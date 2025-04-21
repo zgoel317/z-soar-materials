@@ -48,9 +48,6 @@ class ConstructorConfig(Serializable):
     If the number of examples is less than this, the
     latent will not be explained and scored."""
 
-    max_examples: int = 10_000
-    """Maximum number of activating examples to generate for a single latent."""
-
     n_non_activating: int = 50
     """Number of non-activating examples to be constructed."""
 

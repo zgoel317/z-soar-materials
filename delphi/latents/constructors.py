@@ -59,7 +59,6 @@ def _top_k_pools(
     max_buffer: Float[Tensor, "batch"],
     split_activations: Float[Tensor, "activations ctx_len"],
     buffer_tokens: Int[Tensor, "batch ctx_len"],
-    max_examples: int,
 ) -> tuple[Int[Tensor, "examples ctx_len"], Float[Tensor, "examples ctx_len"]]:
     """
     Get the top k activation pools.
@@ -73,11 +72,10 @@ def _top_k_pools(
     Returns:
         The token windows and activation windows.
     """
-    k = min(max_examples, len(max_buffer))
-    top_values, top_indices = torch.topk(max_buffer, k, sorted=True)
+    sorted_values, sorted_indices = torch.sort(max_buffer, descending=True)
 
-    activation_windows = torch.stack([split_activations[i] for i in top_indices])
-    token_windows = buffer_tokens[top_indices]
+    activation_windows = torch.stack([split_activations[i] for i in sorted_indices])
+    token_windows = buffer_tokens[sorted_indices]
 
     return token_windows, activation_windows
 
@@ -88,7 +86,6 @@ def pool_max_activation_windows(
     ctx_indices: Int[Tensor, "examples"],
     index_within_ctx: Int[Tensor, "examples"],
     ctx_len: int,
-    max_examples: int,
 ) -> tuple[Int[Tensor, "examples ctx_len"], Float[Tensor, "examples ctx_len"]]:
     """
     Pool max activation windows from the buffer output and update the latent record.
@@ -119,9 +116,7 @@ def pool_max_activation_windows(
     new_tensor[inverses, index_within_ctx] = activations
     tokens = tokens[unique_ctx_indices]
 
-    token_windows, activation_windows = _top_k_pools(
-        max_buffer, new_tensor, tokens, max_examples
-    )
+    token_windows, activation_windows = _top_k_pools(max_buffer, new_tensor, tokens)
 
     return token_windows, activation_windows
 
@@ -133,7 +128,6 @@ def pool_centered_activation_windows(
     ctx_indices: Float[Tensor, "examples"],
     index_within_ctx: Float[Tensor, "examples"],
     ctx_len: int,
-    max_examples: int,
 ) -> tuple[Float[Tensor, "examples ctx_len"], Float[Tensor, "examples ctx_len"]]:
     """
     Similar to pool_max_activation_windows. Doesn't use the ctx_indices that were
@@ -161,15 +155,14 @@ def pool_centered_activation_windows(
     max_buffer = torch.segment_reduce(activations, "max", lengths=lengths)
 
     # Get the top max_examples windows
-    k = min(max_examples, len(max_buffer))
-    top_values, top_indices = torch.topk(max_buffer, k, sorted=True)
+    sorted_values, sorted_indices = torch.sort(max_buffer, descending=True)
 
     # this tensor has the correct activations for each context window
     temp_tensor = torch.zeros(len(unique_ctx_indices), ctx_len, dtype=activations.dtype)
     temp_tensor[inverses, index_within_ctx] = activations
 
-    unique_ctx_indices = unique_ctx_indices[top_indices]
-    temp_tensor = temp_tensor[top_indices]
+    unique_ctx_indices = unique_ctx_indices[sorted_indices]
+    temp_tensor = temp_tensor[sorted_indices]
 
     # if a element in unique_ctx_indices is divisible by n_windows_per_batch it
     # the start of a new batch, so we discard it
@@ -247,7 +240,6 @@ def constructor(
     example_ctx_len = constructor_cfg.example_ctx_len
     source_non_activating = constructor_cfg.non_activating_source
     n_not_active = constructor_cfg.n_non_activating
-    max_examples = constructor_cfg.max_examples
     min_examples = constructor_cfg.min_examples
     # Get all positions where the latent is active
     flat_indices = (
@@ -276,7 +268,6 @@ def constructor(
             ctx_indices=ctx_indices,
             index_within_ctx=index_within_ctx,
             ctx_len=example_ctx_len,
-            max_examples=max_examples,
         )
     else:
         token_windows, act_windows = pool_centered_activation_windows(
@@ -286,10 +277,7 @@ def constructor(
             ctx_indices=ctx_indices,
             index_within_ctx=index_within_ctx,
             ctx_len=example_ctx_len,
-            max_examples=max_examples,
         )
-    # TODO: We might want to do this in the sampler
-    # we are tokenizing examples that are not going to be used
     record.examples = [
         ActivatingExample(
             tokens=toks,
@@ -433,8 +421,9 @@ def faiss_non_activation_windows(
     cache_path = Path(cache_dir) / embedding_model_name
 
     # Get activating example texts
+
     activating_texts = [
-        "".join(example.str_tokens)
+        "".join(tokenizer.batch_decode(example.tokens))
         for example in record.examples[: min(10, len(record.examples))]
     ]
 
