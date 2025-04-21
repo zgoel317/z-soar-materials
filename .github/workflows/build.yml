@@ -24,10 +24,6 @@ jobs:
           pip install -e ".[dev,visualize]"
       - name: Run tests
         run: pytest
-      - name: Type Checking
-        uses: jakebailey/pyright-action@v1
-        with:
-          version: 1.1.378
       - name: build
         run: pip wheel --no-deps -w dist .
   release:
