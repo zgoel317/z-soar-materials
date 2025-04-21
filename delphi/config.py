@@ -142,6 +142,9 @@ class RunConfig(Serializable):
     filter_bos: bool = False
     """Whether to filter out BOS tokens from the cache."""
 
+    log_probs: bool = False
+    """Whether to attempt to gather log probabilities for each scorer prompt."""
+
     load_in_8bit: bool = False
     """Load the model in 8-bit mode."""
 
