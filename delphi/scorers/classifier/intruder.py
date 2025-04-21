@@ -1,7 +1,9 @@
 import asyncio
 import re
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal
+
+from beartype.typing import Sequence
 
 from ...clients.client import Client
 from ...latents import ActivatingExample, Example, LatentRecord, NonActivatingExample
