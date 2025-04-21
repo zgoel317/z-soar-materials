@@ -1,6 +1,11 @@
 import random
 from typing import Literal
 
+from transformers import (
+    PreTrainedTokenizer,
+    PreTrainedTokenizerFast,
+)
+
 from ..config import SamplerConfig
 from ..logger import logger
 from .latents import ActivatingExample, LatentRecord
@@ -78,7 +83,6 @@ def train(
             selected_examples = normalize_activations(selected_examples, max_activation)
             return selected_examples
         case "mix":
-            # TODO: currently it will always do 1/5 top and 4/5 quantiles
             top_examples = examples[: int(n_train * ratio_top)]
             quantiles_examples = split_quantiles(
                 examples[int(n_train * ratio_top) :],
@@ -107,6 +111,7 @@ def test(
 def sampler(
     record: LatentRecord,
     cfg: SamplerConfig,
+    tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
 ):
     examples = record.examples
     max_activation = record.max_activation
@@ -118,6 +123,10 @@ def sampler(
         n_quantiles=cfg.n_quantiles,
         ratio_top=cfg.ratio_top,
     )
+    # Moved tokenization to sampler to avoid tokenizing
+    # examples that are not going to be used
+    for example in _train:
+        example.str_tokens = tokenizer.batch_decode(example.tokens)
     record.train = _train
     if cfg.n_examples_test > 0:
         _test = test(
@@ -127,5 +136,7 @@ def sampler(
             cfg.n_quantiles,
             cfg.test_type,
         )
+        for example in _test:
+            example.str_tokens = tokenizer.batch_decode(example.tokens)
         record.test = _test
     return record

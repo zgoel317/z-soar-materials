@@ -75,7 +75,7 @@ class Example:
     activations: Float[Tensor, "ctx_len"]
     """Activation values for the input sequence."""
 
-    str_tokens: list[str]
+    str_tokens: list[str] | None = None
     """Tokenized input sequence as strings."""
 
     normalized_activations: Optional[Float[Tensor, "ctx_len"]] = None

@@ -401,11 +401,10 @@ class LatentDataset:
             activation_data=latent_data.activation_data,
             constructor_cfg=self.constructor_cfg,
             tokens=self.tokens,
-            all_data=self.all_data[latent_data.module],
             tokenizer=self.tokenizer,
+            all_data=self.all_data[latent_data.module],
         )
-        # Not enough examples to explain the latent
         if record is None:
             return None
-        record = sampler(record, self.sampler_cfg)
+        record = sampler(record, self.sampler_cfg, self.tokenizer)
         return record

@@ -112,17 +112,124 @@ def pool_max_activation_windows(
 
     # Get the max activation magnitude within each context window
     max_buffer = torch.segment_reduce(activations, "max", lengths=lengths)
-
     # Deduplicate the context windows
     new_tensor = torch.zeros(len(unique_ctx_indices), ctx_len, dtype=activations.dtype)
     new_tensor[inverses, index_within_ctx] = activations
-
     tokens = tokens[unique_ctx_indices]
 
     token_windows, activation_windows = _top_k_pools(
         max_buffer, new_tensor, tokens, max_examples
     )
 
+    return token_windows, activation_windows
+
+
+def pool_centered_activation_windows(
+    activations: Float[Tensor, "examples"],
+    tokens: Float[Tensor, "windows seq"],
+    n_windows_per_batch: int,
+    ctx_indices: Float[Tensor, "examples"],
+    index_within_ctx: Float[Tensor, "examples"],
+    ctx_len: int,
+    max_examples: int,
+) -> tuple[Float[Tensor, "examples ctx_len"], Float[Tensor, "examples ctx_len"]]:
+    """
+    Similar to pool_max_activation_windows. Doesn't use the ctx_indices that were
+    at the start of the batch or the end of the batch, because it always tries
+    to have a buffer of ctx_len*5//6 on the left and ctx_len*1//6 on the right.
+    To do this, for each window, it joins the contexts from the other windows
+    of the same batch, to form a new context, which is then cut to the correct shape,
+    centered on the max activation.
+
+    Args:
+        activations : The activations.
+        tokens : The input tokens.
+        ctx_indices : The context indices.
+        index_within_ctx : The index within the context.
+        ctx_len : The context length.
+        max_examples : The maximum number of examples.
+    """
+
+    # Get unique context indices and their counts like in pool_max_activation_windows
+    unique_ctx_indices, inverses, lengths = torch.unique_consecutive(
+        ctx_indices, return_counts=True, return_inverse=True
+    )
+
+    # Get the max activation magnitude within each context window
+    max_buffer = torch.segment_reduce(activations, "max", lengths=lengths)
+
+    # Get the top max_examples windows
+    k = min(max_examples, len(max_buffer))
+    top_values, top_indices = torch.topk(max_buffer, k, sorted=True)
+
+    # this tensor has the correct activations for each context window
+    temp_tensor = torch.zeros(len(unique_ctx_indices), ctx_len, dtype=activations.dtype)
+    temp_tensor[inverses, index_within_ctx] = activations
+
+    unique_ctx_indices = unique_ctx_indices[top_indices]
+    temp_tensor = temp_tensor[top_indices]
+
+    # if a element in unique_ctx_indices is divisible by n_windows_per_batch it
+    # the start of a new batch, so we discard it
+    modulo = unique_ctx_indices % n_windows_per_batch
+    not_first_position = modulo != 0
+    # remove also the elements that are at the end of the batch
+    not_last_position = modulo != n_windows_per_batch - 1
+    mask = not_first_position & not_last_position
+    unique_ctx_indices = unique_ctx_indices[mask]
+    temp_tensor = temp_tensor[mask]
+
+    if len(unique_ctx_indices) == 0:
+        return torch.zeros(0, ctx_len), torch.zeros(0, ctx_len)
+
+    # Vectorized operations for all windows at once
+    n_windows = len(unique_ctx_indices)
+
+    # Create indices for previous, current, and next windows
+    prev_indices = unique_ctx_indices - 1
+    next_indices = unique_ctx_indices + 1
+
+    # Create a tensor to hold all concatenated tokens
+    all_tokens = torch.cat(
+        [tokens[prev_indices], tokens[unique_ctx_indices], tokens[next_indices]], dim=1
+    )  # Shape: [n_windows, ctx_len*3]
+
+    # Create tensor for all activations
+    final_tensor = torch.zeros((n_windows, ctx_len * 3), dtype=activations.dtype)
+    final_tensor[:, ctx_len : ctx_len * 2] = (
+        temp_tensor  # Set current window activations
+    )
+
+    # Set previous window activations where available
+    prev_mask = torch.isin(prev_indices, unique_ctx_indices)
+    if prev_mask.any():
+        prev_locations = torch.where(
+            unique_ctx_indices.unsqueeze(1) == prev_indices.unsqueeze(0)
+        )[1]
+        final_tensor[prev_mask, :ctx_len] = temp_tensor[prev_locations]
+
+    # Set next window activations where available
+    next_mask = torch.isin(next_indices, unique_ctx_indices)
+    if next_mask.any():
+        next_locations = torch.where(
+            unique_ctx_indices.unsqueeze(1) == next_indices.unsqueeze(0)
+        )[1]
+        final_tensor[next_mask, ctx_len * 2 :] = temp_tensor[next_locations]
+
+    # Find max activation indices
+    max_activation_indices = torch.argmax(temp_tensor, dim=1) + ctx_len
+
+    # Calculate left for all windows
+    left_positions = max_activation_indices - (ctx_len - ctx_len // 4)
+
+    # Create index tensors for gathering
+    batch_indices = torch.arange(n_windows).unsqueeze(1)
+    pos_indices = torch.arange(ctx_len).unsqueeze(0)
+    gather_indices = left_positions.unsqueeze(1) + pos_indices
+
+    # Gather the final windows
+    token_windows = all_tokens[batch_indices, gather_indices]
+    activation_windows = final_tensor[batch_indices, gather_indices]
     return token_windows, activation_windows
 
 
@@ -141,7 +248,6 @@ def constructor(
     n_not_active = constructor_cfg.n_non_activating
     max_examples = constructor_cfg.max_examples
     min_examples = constructor_cfg.min_examples
-
     # Get all positions where the latent is active
     flat_indices = (
         activation_data.locations[:, 0] * cache_ctx_len
@@ -149,24 +255,32 @@ def constructor(
     )
     ctx_indices = flat_indices // example_ctx_len
     index_within_ctx = flat_indices % example_ctx_len
+    n_windows_per_batch = tokens.shape[0] // example_ctx_len
     reshaped_tokens = tokens.reshape(-1, example_ctx_len)
     n_windows = reshaped_tokens.shape[0]
-
     unique_batch_pos = ctx_indices.unique()
-
     mask = torch.ones(n_windows, dtype=torch.bool)
     mask[unique_batch_pos] = False
     # Indices where the latent is not active
     non_active_indices = mask.nonzero(as_tuple=False).squeeze()
     activations = activation_data.activations
-
     # per context frequency
     record.per_context_frequency = len(unique_batch_pos) / n_windows
 
     # Add activation examples to the record in place
-    token_windows, act_windows = pool_max_activation_windows(
+    # token_windows, act_windows = pool_max_activation_windows(
+    #     activations=activations,
+    #     tokens=reshaped_tokens,
+    #     ctx_indices=ctx_indices,
+    #     index_within_ctx=index_within_ctx,
+    #     ctx_len=example_ctx_len,
+    #     max_examples=max_examples,
+    # )
+
+    token_windows, act_windows = pool_centered_activation_windows(
         activations=activations,
         tokens=reshaped_tokens,
+        n_windows_per_batch=n_windows_per_batch,
         ctx_indices=ctx_indices,
         index_within_ctx=index_within_ctx,
         ctx_len=example_ctx_len,
@@ -179,11 +293,9 @@ def constructor(
             tokens=toks,
             activations=acts,
             normalized_activations=None,
-            str_tokens=tokenizer.batch_decode(toks),
         )
         for toks, acts in zip(token_windows, act_windows)
     ]
-
     if len(record.examples) < min_examples:
         # Not enough examples to explain the latent
         return None
