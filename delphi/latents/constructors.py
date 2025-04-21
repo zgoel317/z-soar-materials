@@ -603,9 +603,10 @@ def neighbour_non_activation_windows(
             tokens=reshaped_tokens,
             ctx_indices=available_ctx_indices,
             index_within_ctx=available_index_within_ctx,
-            max_examples=n_examples_per_neighbour,
             ctx_len=ctx_len,
         )
+        token_windows = token_windows[:n_examples_per_neighbour]
+        token_activations = token_activations[:n_examples_per_neighbour]
         # use the first n_examples_per_neighbour examples,
         # which will be the most active examples
         examples_used = len(token_windows)
