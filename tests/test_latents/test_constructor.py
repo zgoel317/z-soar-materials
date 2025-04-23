@@ -90,7 +90,6 @@ def test_simple_cache(
         constructor_cfg=ConstructorConfig(
             example_ctx_len=ctx_len,
             min_examples=1,
-            max_examples=100,
             n_non_activating=50,
             non_activating_source="neighbours",
         ),
