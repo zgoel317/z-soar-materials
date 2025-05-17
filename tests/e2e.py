@@ -27,7 +27,7 @@ async def test():
         n_quantiles=10,
     )
     constructor_cfg = ConstructorConfig(
-        min_examples=200,
+        min_examples=90,
         example_ctx_len=32,
         n_non_activating=50,
         non_activating_source="random",

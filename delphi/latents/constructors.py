@@ -286,6 +286,7 @@ def constructor(
         for toks, acts in zip(token_windows, act_windows)
     ]
     if len(record.examples) < min_examples:
+        print(f"Not enough examples to explain the latent: {len(record.examples)}")
         # Not enough examples to explain the latent
         return None
 

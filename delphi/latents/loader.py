@@ -339,7 +339,8 @@ class LatentDataset:
             while True:
                 # Retrieve the next item from the asynchronous iterator
                 record = loop.run_until_complete(anext(async_gen))
-                yield record
+                if record is not None:
+                    yield record
         except StopAsyncIteration:
             return
         finally:
