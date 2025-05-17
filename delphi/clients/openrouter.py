@@ -4,17 +4,12 @@ from asyncio import sleep
 import httpx
 
 from ..logger import logger
-from .client import Client
+from .client import Client, Response
 from .types import ChatFormatRequest
 
 # Preferred provider routing arguments.
 # Change depending on what model you'd like to use.
 PROVIDER = {"order": ["Together", "DeepInfra"]}
-
-
-class Response:
-    def __init__(self, response):
-        self.text = response
 
 
 class OpenRouter(Client):
@@ -39,12 +34,11 @@ class OpenRouter(Client):
     def postprocess(self, response):
         response_json = response.json()
         msg = response_json["choices"][0]["message"]["content"]
-        return Response(msg)
+        return Response(text=msg)
 
     async def generate(  # type: ignore
         self,
         prompt: ChatFormatRequest,
-        raw: bool = False,
         max_retries: int = 1,
         **kwargs,  # type: ignore
     ) -> Response:  # type: ignore
@@ -66,8 +60,6 @@ class OpenRouter(Client):
                 response = await self.client.post(
                     url=self.url, json=data, headers=self.headers, timeout=100
                 )
-                if raw:
-                    return response.json()
                 result = self.postprocess(response)
 
                 return result
