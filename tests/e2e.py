@@ -28,7 +28,6 @@ async def test():
     )
     constructor_cfg = ConstructorConfig(
         min_examples=200,
-        max_examples=10_000,
         example_ctx_len=32,
         n_non_activating=50,
         non_activating_source="random",
