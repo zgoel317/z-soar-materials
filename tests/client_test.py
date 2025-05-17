@@ -121,6 +121,7 @@ async def main(
             train_type="quantiles",
             test_type="quantiles",
         ),
+        tokenizer,
     )
 
     most_recent_generation = None

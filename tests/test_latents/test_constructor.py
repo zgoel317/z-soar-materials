@@ -32,11 +32,15 @@ def test_save_load_cache(
         test_type="quantiles",
     )
     dataset = LatentDataset(
-        cache_setup["temp_dir"], sampler_cfg, ConstructorConfig(), tokenizer
+        cache_setup["temp_dir"],
+        sampler_cfg,
+        ConstructorConfig(min_examples=0),
+        tokenizer,
     )
     tokens: Int[Tensor, "examples ctx_len"] = dataset.load_tokens()  # type: ignore
     assert (tokens == cache_setup["tokens"][: len(tokens)]).all()
     for record in dataset:
+        print(record)
         assert len(record.train) <= sampler_cfg.n_examples_train
         assert len(record.test) <= sampler_cfg.n_examples_test
 
