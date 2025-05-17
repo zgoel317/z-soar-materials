@@ -52,8 +52,6 @@ def mock_dataset(tokenizer: PreTrainedTokenizer) -> torch.Tensor:
         random_text, return_tensors="pt", truncation=True, max_length=16, padding=True
     )["input_ids"]
     tokens = cast(Tensor, tokens)
-    print(tokens)
-    print(tokens.shape)
     return tokens
 
 
@@ -79,7 +77,6 @@ def cache_setup(tmp_path_factory, mock_dataset: torch.Tensor, model: PreTrainedM
         hookpoints=["layers.1"],
     )
     hookpoint_to_sparse_encode, _ = load_hooks_sparse_coders(model, run_cfg_gemma)
-    print(hookpoint_to_sparse_encode)
     # Define cache config and initialize cache
     cache = LatentCache(
         model, hookpoint_to_sparse_encode, batch_size=cache_cfg.batch_size
