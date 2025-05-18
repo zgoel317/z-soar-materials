@@ -360,12 +360,16 @@ class LatentDataset:
                     tasks, return_when=asyncio.FIRST_COMPLETED
                 )
                 for task in done:
-                    yield task.result()
+                    result = task.result()
+                    if result is not None:
+                        yield result
                 tasks = pending
         if tasks:
             done, _ = await asyncio.wait(tasks)
             for task in done:
-                yield task.result()
+                result = task.result()
+                if result is not None:
+                    yield result
 
     async def _aprocess_buffer(self, buffer: TensorBuffer):
         """
@@ -387,11 +391,15 @@ class LatentDataset:
                 tasks, return_when=asyncio.FIRST_COMPLETED
             )
             for task in done:
-                yield task.result()
+                result = task.result()
+                if result is not None:
+                    yield result
             tasks = pending
         done, _ = await asyncio.wait(tasks)
         for task in done:
-            yield task.result()
+            result = task.result()
+            if result is not None:
+                yield result
 
     @asyncify
     def _aprocess_latent(self, latent_data: LatentData) -> LatentRecord | None:
