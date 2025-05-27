@@ -139,6 +139,30 @@ class RunConfig(Serializable):
     """Provider to use for explanation and scoring. Options are 'offline' for local
     models and 'openrouter' for API calls."""
 
+    explainer: str = field(
+        choices=[
+            "default",
+            "none"
+        ],
+        default="default",
+    )
+    """Explainer to use for generating explanations. Options are 'default' for
+    the default single token explainer, and 'none' for no explanation generation."""
+
+    scorers: list[str] = list_field(
+        choices=[
+            "fuzzing",
+            "detection",
+            "simulation",
+        ],
+        default=[
+            "fuzzing",
+            "detection",
+        ]
+    )
+    """Scorer methods to score latent explanations. Options are 'fuzzing', 'detection', and
+    'simulation'."""
+
     name: str = ""
     """The name of the run. Results are saved in a directory with this name."""
 

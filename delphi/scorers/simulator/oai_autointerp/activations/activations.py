@@ -13,8 +13,11 @@ class ActivationRecord(Serializable):
 
     tokens: list[str]
     """Tokens in the text sequence, represented as strings."""
+    
     activations: list[int | float]
     """Raw activation values for the neuron on each token in the text sequence."""
+
+    quantile: Optional[int] = None
 
 
 def _check_slices(
