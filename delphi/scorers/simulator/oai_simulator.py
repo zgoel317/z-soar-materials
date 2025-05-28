@@ -1,7 +1,8 @@
-import torch
 from typing import Union
 
-from delphi.latents.latents import NonActivatingExample, ActivatingExample
+import torch
+
+from delphi.latents.latents import ActivatingExample, NonActivatingExample
 
 from ..scorer import Scorer, ScorerResult
 from .oai_autointerp import (
@@ -56,24 +57,28 @@ class OpenAISimulator(Scorer):
             score=result,
         )
 
-    def to_activation_records(self, examples: list[Union[ActivatingExample, NonActivatingExample]]) -> list[ActivationRecord]:
+    def to_activation_records(
+        self, examples: list[Union[ActivatingExample, NonActivatingExample]]
+    ) -> list[ActivationRecord]:
         # Filter Nones
         result = []
         for example in examples:
-            if example is None: 
+            if example is None:
                 continue
-            
+
             if example.normalized_activations is None:
                 # Use zeros for non-activating examples
-                example.normalized_activations = torch.zeros_like(
-                    example.activations
-                )
-            
+                example.normalized_activations = torch.zeros_like(example.activations)
+
             result.append(
                 ActivationRecord(
                     self.tokenizer.batch_decode(example.tokens),
                     example.normalized_activations.half(),
-                    quantile=example.quantile if isinstance(example, ActivatingExample) else None,
+                    quantile=(
+                        example.quantile
+                        if isinstance(example, ActivatingExample)
+                        else None
+                    ),
                 )
             )
 

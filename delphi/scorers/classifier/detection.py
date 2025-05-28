@@ -1,7 +1,7 @@
 from ...clients.client import Client
 from ...latents import LatentRecord
-from .classifier import Classifier
 from ...scorers.scorer import Scorer
+from .classifier import Classifier
 from .prompts.detection_prompt import prompt as detection_prompt
 from .sample import Sample, examples_to_samples
 
