@@ -432,12 +432,17 @@ class LatentCache:
         Save the firing counts for the cached latents.
         """
         if self.log_path is None:
-            log_path = Path.cwd() / "results" / "log" / "hookpoint_firing_counts.pt"
-        else:
-            log_path = self.log_path / "hookpoint_firing_counts.pt"
+            return
 
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(self.hookpoint_firing_counts, log_path)
+        file_path = self.log_path / "hookpoint_firing_counts.pt"
+
+        if file_path.exists():
+            existing_firing_counts = torch.load(file_path, weights_only=True)
+            for hookpoint, counts in existing_firing_counts.items():
+                if hookpoint not in self.hookpoint_firing_counts:
+                    self.hookpoint_firing_counts[hookpoint] = counts
+
+        torch.save(self.hookpoint_firing_counts, file_path)
 
 
 @dataclass
