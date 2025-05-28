@@ -19,12 +19,13 @@ from transformers import (
 
 from delphi.clients import Offline, OpenRouter
 from delphi.config import RunConfig
-from delphi.explainers import ContrastiveExplainer, DefaultExplainer
+from delphi.explainers import ContrastiveExplainer, DefaultExplainer, NoOpExplainer
+from delphi.explainers.explainer import ExplainerResult
 from delphi.latents import LatentCache, LatentDataset
 from delphi.latents.neighbours import NeighbourCalculator
 from delphi.log.result_analysis import log_results
 from delphi.pipeline import Pipe, Pipeline, process_wrapper
-from delphi.scorers import DetectionScorer, FuzzingScorer
+from delphi.scorers import DetectionScorer, FuzzingScorer, OpenAISimulator
 from delphi.sparse_coders import load_hooks_sparse_coders, load_sparse_coders
 from delphi.utils import assert_type, load_tokenized_data
 
@@ -119,14 +120,9 @@ async def process_cache(
     """
     Converts SAE latent activations in on-disk cache in the `latents_path` directory
     to latent explanations in the `explanations_path` directory and explanation
-    scores in the `fuzz_scores_path` directory.
+    scores in the `scores_path` directory.
     """
     explanations_path.mkdir(parents=True, exist_ok=True)
-
-    fuzz_scores_path = scores_path / "fuzz"
-    detection_scores_path = scores_path / "detection"
-    fuzz_scores_path.mkdir(parents=True, exist_ok=True)
-    detection_scores_path.mkdir(parents=True, exist_ok=True)
 
     if latent_range is None:
         latent_dict = None
@@ -145,7 +141,7 @@ async def process_cache(
     )
 
     if run_cfg.explainer_provider == "offline":
-        client = Offline(
+        llm_client = Offline(
             run_cfg.explainer_model,
             max_memory=0.9,
             # Explainer models context length - must be able to accommodate the longest
@@ -164,7 +160,7 @@ async def process_cache(
                 "`--explainer-provider offline` to use a local explainer model."
             )
 
-        client = OpenRouter(
+        llm_client = OpenRouter(
             run_cfg.explainer_model,
             api_key=os.environ["OPENROUTER_API_KEY"],
         )
@@ -173,26 +169,53 @@ async def process_cache(
             f"Explainer provider {run_cfg.explainer_provider} not supported"
         )
 
-    def explainer_postprocess(result):
-        with open(explanations_path / f"{result.record.latent}.txt", "wb") as f:
-            f.write(orjson.dumps(result.explanation))
+    if not run_cfg.explainer == "none":
 
-        return result
+        def explainer_postprocess(result):
+            with open(explanations_path / f"{result.record.latent}.txt", "wb") as f:
+                f.write(orjson.dumps(result.explanation))
 
-    if run_cfg.constructor_cfg.non_activating_source == "FAISS":
-        explainer = ContrastiveExplainer(
-            client,
-            threshold=0.3,
-            verbose=run_cfg.verbose,
+            return result
+
+        if run_cfg.constructor_cfg.non_activating_source == "FAISS":
+            explainer = ContrastiveExplainer(
+                llm_client,
+                threshold=0.3,
+                verbose=run_cfg.verbose,
+            )
+        else:
+            explainer = DefaultExplainer(
+                llm_client,
+                threshold=0.3,
+                verbose=run_cfg.verbose,
+            )
+
+        explainer_pipe = Pipe(
+            process_wrapper(explainer, postprocess=explainer_postprocess)
         )
     else:
-        explainer = DefaultExplainer(
-            client,
-            threshold=0.3,
-            verbose=run_cfg.verbose,
-        )
 
-    explainer_pipe = Pipe(process_wrapper(explainer, postprocess=explainer_postprocess))
+        def none_postprocessor(result):
+            # Load the explanation from disk
+            explanation_path = explanations_path / f"{result.record.latent}.txt"
+            if not explanation_path.exists():
+                raise FileNotFoundError(
+                    f"Explanation file {explanation_path} does not exist. "
+                    "Make sure to run an explainer pipeline first."
+                )
+
+            with open(explanation_path, "rb") as f:
+                return ExplainerResult(
+                    record=result.record,
+                    explanation=orjson.loads(f.read()),
+                )
+
+        explainer_pipe = Pipe(
+            process_wrapper(
+                NoOpExplainer(),
+                postprocess=none_postprocessor,
+            )
+        )
 
     # Builds the record from result returned by the pipeline
     def scorer_preprocess(result):
@@ -211,33 +234,41 @@ async def process_cache(
         with open(score_dir / f"{safe_latent_name}.txt", "wb") as f:
             f.write(orjson.dumps(result.score))
 
-    scorer_pipe = Pipe(
-        process_wrapper(
-            DetectionScorer(
-                client,
+    scorers = []
+    for scorer_name in run_cfg.scorers:
+        scorer_path = scores_path / scorer_name
+        scorer_path.mkdir(parents=True, exist_ok=True)
+
+        if scorer_name == "simulation":
+            scorer = OpenAISimulator(llm_client, tokenizer=tokenizer, all_at_once=False)
+        elif scorer_name == "fuzz":
+            scorer = FuzzingScorer(
+                llm_client,
                 n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
                 verbose=run_cfg.verbose,
                 log_prob=run_cfg.log_probs,
-            ),
-            preprocess=scorer_preprocess,
-            postprocess=partial(scorer_postprocess, score_dir=detection_scores_path),
-        ),
-        process_wrapper(
-            FuzzingScorer(
-                client,
+            )
+        elif scorer_name == "detection":
+            scorer = DetectionScorer(
+                llm_client,
                 n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
                 verbose=run_cfg.verbose,
                 log_prob=run_cfg.log_probs,
-            ),
+            )
+        else:
+            raise ValueError(f"Scorer {scorer_name} not supported")
+
+        wrapped_scorer = process_wrapper(
+            scorer,
             preprocess=scorer_preprocess,
-            postprocess=partial(scorer_postprocess, score_dir=fuzz_scores_path),
-        ),
-    )
+            postprocess=partial(scorer_postprocess, score_dir=scorer_path),
+        )
+        scorers.append(wrapped_scorer)
 
     pipeline = Pipeline(
         dataset,
         explainer_pipe,
-        scorer_pipe,
+        Pipe(*scorers),
     )
 
     if run_cfg.pipeline_num_proc > 1 and run_cfg.explainer_provider == "openrouter":
@@ -415,7 +446,7 @@ async def run(
         )
 
     if run_cfg.verbose:
-        log_results(scores_path, visualize_path, run_cfg.hookpoints)
+        log_results(scores_path, visualize_path, run_cfg.hookpoints, run_cfg.scorers)
 
 
 if __name__ == "__main__":

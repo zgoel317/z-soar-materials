@@ -1,11 +1,12 @@
 from ...clients.client import Client
 from ...latents import LatentRecord
+from ...scorers.scorer import Scorer
 from .classifier import Classifier
 from .prompts.detection_prompt import prompt as detection_prompt
 from .sample import Sample, examples_to_samples
 
 
-class DetectionScorer(Classifier):
+class DetectionScorer(Classifier, Scorer):
     name = "detection"
 
     def __init__(

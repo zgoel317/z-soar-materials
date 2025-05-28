@@ -78,8 +78,14 @@ def cache_setup(tmp_path_factory, mock_dataset: torch.Tensor, model: PreTrainedM
     )
     hookpoint_to_sparse_encode, _ = load_hooks_sparse_coders(model, run_cfg_gemma)
     # Define cache config and initialize cache
+    log_path = Path.cwd() / "results" / "test" / "log"
+    log_path.mkdir(parents=True, exist_ok=True)
+
     cache = LatentCache(
-        model, hookpoint_to_sparse_encode, batch_size=cache_cfg.batch_size
+        model,
+        hookpoint_to_sparse_encode,
+        batch_size=cache_cfg.batch_size,
+        log_path=log_path,
     )
 
     # Generate mock tokens and run the cache
@@ -94,7 +100,7 @@ def cache_setup(tmp_path_factory, mock_dataset: torch.Tensor, model: PreTrainedM
 
     cache.save_config(temp_dir, cache_cfg, "EleutherAI/pythia-70m")
     hookpoint_firing_counts = torch.load(
-        Path.cwd() / "results" / "log" / "hookpoint_firing_counts.pt", weights_only=True
+        log_path / "hookpoint_firing_counts.pt", weights_only=True
     )
     return {
         "cache": cache,

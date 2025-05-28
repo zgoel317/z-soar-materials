@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Optional, Protocol, Union
 
 import torch
-import torch._dynamo.eval_frame
 from sparsify import SparseCoder, SparseCoderConfig
 from sparsify.sparse_coder import EncoderOutput
 from torch import Tensor
