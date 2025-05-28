@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Optional
 
 import orjson
 import pandas as pd
@@ -181,6 +182,10 @@ def load_data(scores_path: Path, modules: list[str]):
 
     counts_file = scores_path.parent / "log" / "hookpoint_firing_counts.pt"
     counts = torch.load(counts_file, weights_only=True) if counts_file.exists() else {}
+    if not all(module in counts for module in modules):
+        print("Missing firing counts for some modules, setting counts to None.")
+        print(f"Missing modules: {[m for m in modules if m not in counts]}")
+        counts = None
 
     # Collect per-latent data
     latent_dfs = []
@@ -195,7 +200,7 @@ def load_data(scores_path: Path, modules: list[str]):
                 latent_df["score_type"] = score_type_dir.name
                 latent_df["module"] = module
                 latent_df["latent_idx"] = latent_idx
-                if module in counts:
+                if counts:
                     latent_df["firing_count"] = (
                         counts[module][latent_idx].item()
                         if latent_idx in counts[module]
@@ -247,14 +252,14 @@ def frequency_weighted_f1(
 
 
 def get_agg_metrics(
-    latent_df: pd.DataFrame, counts: dict[str, torch.Tensor]
+    latent_df: pd.DataFrame, counts: Optional[dict[str, torch.Tensor]]
 ) -> pd.DataFrame:
     processed_rows = []
     for score_type, group_df in latent_df.groupby("score_type"):
         conf = compute_confusion(group_df)
         class_m = compute_classification_metrics(conf)
         auc = compute_auc(group_df)
-        f1_w = frequency_weighted_f1(group_df, counts)
+        f1_w = frequency_weighted_f1(group_df, counts) if counts else None
 
         row = {
             "score_type": score_type,
@@ -296,7 +301,7 @@ def log_results(
         print("No data found")
         return
 
-    dead = sum((counts[m] == 0).sum().item() for m in modules if m in counts)
+    dead = sum((counts[m] == 0).sum().item() for m in modules)
     print(f"Number of dead features: {dead}")
     print(f"Number of interpreted live features: {len(latent_df)}")
 
@@ -309,7 +314,7 @@ def log_results(
 
     if min_examples is not None:
         uninterpretable_features = sum(
-            [(counts[m] < min_examples).sum() for m in modules if m in counts]
+            [(counts[m] < min_examples).sum() for m in modules]
         )
         print(
             f"Number of features below the interpretation firing"
