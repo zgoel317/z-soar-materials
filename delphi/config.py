@@ -131,7 +131,8 @@ class RunConfig(Serializable):
     explainer_model_max_len: int = field(
         default=5120,
     )
-    """Maximum length of the explainer model context window."""
+    """Maximum length of the explainer model context window. For simulation scoring
+    this length should be increased."""
 
     explainer_provider: str = field(
         default="offline",
@@ -140,10 +141,7 @@ class RunConfig(Serializable):
     models and 'openrouter' for API calls."""
 
     explainer: str = field(
-        choices=[
-            "default",
-            "none"
-        ],
+        choices=["default", "none"],
         default="default",
     )
     """Explainer to use for generating explanations. Options are 'default' for
@@ -151,16 +149,16 @@ class RunConfig(Serializable):
 
     scorers: list[str] = list_field(
         choices=[
-            "fuzzing",
+            "fuzz",
             "detection",
             "simulation",
         ],
         default=[
-            "fuzzing",
+            "fuzz",
             "detection",
-        ]
+        ],
     )
-    """Scorer methods to score latent explanations. Options are 'fuzzing', 'detection', and
+    """Scorer methods to score latent explanations. Options are 'fuzz', 'detection', and
     'simulation'."""
 
     name: str = ""

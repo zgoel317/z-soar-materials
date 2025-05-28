@@ -162,16 +162,18 @@ async def simulate_and_score(
         *[
             _simulate_and_score_sequence(
                 # TODO do we still want a plus one
-                simulator, activation_record, activation_record.quantile
+                simulator,
+                activation_record,
+                activation_record.quantile,
             )
             for activation_record in activation_records  # type: ignore
         ]
     )
- 
+
     if len(non_activation_records) > 0:
         non_activating_scored_seq_simulations = await asyncio.gather(
             *[
-                _simulate_and_score_sequence(simulator, non_activation_record[0], -1)  # type: ignore
+                _simulate_and_score_sequence(simulator, non_activation_record, -1)  # type: ignore
                 for non_activation_record in non_activation_records
             ]
         )

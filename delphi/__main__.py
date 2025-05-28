@@ -19,7 +19,7 @@ from transformers import (
 
 from delphi.clients import Offline, OpenRouter
 from delphi.config import RunConfig
-from delphi.explainers import ContrastiveExplainer, DefaultExplainer, NoneExplainer
+from delphi.explainers import ContrastiveExplainer, DefaultExplainer, NoOpExplainer
 from delphi.explainers.explainer import ExplainerResult
 from delphi.latents import LatentCache, LatentDataset
 from delphi.latents.neighbours import NeighbourCalculator
@@ -170,6 +170,7 @@ async def process_cache(
         )
 
     if not run_cfg.explainer == "none":
+
         def explainer_postprocess(result):
             with open(explanations_path / f"{result.record.latent}.txt", "wb") as f:
                 f.write(orjson.dumps(result.explanation))
@@ -189,31 +190,32 @@ async def process_cache(
                 verbose=run_cfg.verbose,
             )
 
-        explainer_pipe = Pipe(process_wrapper(explainer, postprocess=explainer_postprocess))
+        explainer_pipe = Pipe(
+            process_wrapper(explainer, postprocess=explainer_postprocess)
+        )
     else:
-        # Build an explainer pipe that loaders the explanations 
-        # from the on-disk cache in the preprocessor
-        # And has an identity explainer
+
         def none_postprocessor(result):
-            # Load the explanation from the file
+            # Load the explanation from disk
             explanation_path = explanations_path / f"{result.record.latent}.txt"
             if not explanation_path.exists():
                 raise FileNotFoundError(
                     f"Explanation file {explanation_path} does not exist. "
                     "Make sure to run an explainer pipeline first."
                 )
-            
+
             with open(explanation_path, "rb") as f:
                 return ExplainerResult(
                     record=result.record,
                     explanation=orjson.loads(f.read()),
                 )
 
-        explainer_pipe = Pipe(process_wrapper(
-            NoneExplainer(), 
-            postprocess=none_postprocessor,  # No postprocessing, already saved to disk
-        ))
-
+        explainer_pipe = Pipe(
+            process_wrapper(
+                NoOpExplainer(),
+                postprocess=none_postprocessor,
+            )
+        )
 
     # Builds the record from result returned by the pipeline
     def scorer_preprocess(result):
@@ -238,40 +240,29 @@ async def process_cache(
         scorer_path.mkdir(parents=True, exist_ok=True)
 
         if scorer_name == "simulation":
-            wrapped_scorer = process_wrapper(
-                OpenAISimulator(
-                    llm_client,
-                    tokenizer=tokenizer,
-                    all_at_once=False
-                ),
-                preprocess=scorer_preprocess,
-                postprocess=partial(scorer_postprocess, score_dir=scorer_path),
+            scorer = OpenAISimulator(llm_client, tokenizer=tokenizer, all_at_once=False)
+        elif scorer_name == "fuzz":
+            scorer = FuzzingScorer(
+                llm_client,
+                n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
+                verbose=run_cfg.verbose,
+                log_prob=run_cfg.log_probs,
             )
-        elif scorer_name == "fuzzing":
-            wrapped_scorer = process_wrapper(
-                FuzzingScorer(
-                    llm_client,
-                    n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
-                    verbose=run_cfg.verbose,
-                    log_prob=run_cfg.log_probs,
-                ),
-                preprocess=scorer_preprocess,
-                postprocess=partial(scorer_postprocess, score_dir=scorer_path),
-            ),
         elif scorer_name == "detection":
-            wrapped_scorer = process_wrapper(
-                DetectionScorer(
-                    llm_client,
-                    n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
-                    verbose=run_cfg.verbose,
-                    log_prob=run_cfg.log_probs,
-                ),
-                preprocess=scorer_preprocess,
-                postprocess=partial(scorer_postprocess, score_dir=scorer_path),
-            ),
+            scorer = DetectionScorer(
+                llm_client,
+                n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
+                verbose=run_cfg.verbose,
+                log_prob=run_cfg.log_probs,
+            )
         else:
             raise ValueError(f"Scorer {scorer_name} not supported")
 
+        wrapped_scorer = process_wrapper(
+            scorer,
+            preprocess=scorer_preprocess,
+            postprocess=partial(scorer_postprocess, score_dir=scorer_path),
+        )
         scorers.append(wrapped_scorer)
 
     pipeline = Pipeline(
@@ -455,7 +446,7 @@ async def run(
         )
 
     if run_cfg.verbose:
-        log_results(scores_path, visualize_path, run_cfg.hookpoints)
+        log_results(scores_path, visualize_path, run_cfg.hookpoints, run_cfg.scorers)
 
 
 if __name__ == "__main__":
