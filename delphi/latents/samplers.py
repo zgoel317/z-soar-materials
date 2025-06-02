@@ -17,7 +17,7 @@ def normalize_activations(
     max_activation = max(max_activation, eps)
     for example in examples:
         example.normalized_activations = (
-            (example.activations * 10 / max_activation).floor().clamp(0, 10)
+            (example.activations * 10 / max_activation).ceil().clamp(0, 10)
         )
     return examples
 
