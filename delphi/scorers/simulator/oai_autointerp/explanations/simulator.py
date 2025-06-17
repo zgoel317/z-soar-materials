@@ -640,7 +640,7 @@ Fill out the activation values with integer values from 0 to 10. Don't use negat
             }
             """
             prompt_builder.add_message(
-                "user",  # type: ignore
+                "user",
                 _format_record_for_logprob_free_simulation_json(
                     explanation=example.explanation,
                     activation_record=example.activation_records[0],
@@ -680,10 +680,12 @@ Fill out the activation values with integer values from 0 to 10. Don't use negat
         }
         """
         prompt_builder.add_message(
-            "user",  # type: ignore
+            "user",
             _format_record_for_logprob_free_simulation_json(
                 explanation=explanation,
-                activation_record=ActivationRecord(tokens=tokens, activations=[]),  # type: ignore
+                activation_record=ActivationRecord(
+                    tokens=list(tokens), activations=[], quantile=-1
+                ),
                 include_activations=False,
             ),
         )

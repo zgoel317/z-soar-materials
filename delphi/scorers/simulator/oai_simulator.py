@@ -66,18 +66,21 @@ class OpenAISimulator(Scorer):
             if example is None:
                 continue
 
-            if example.normalized_activations is None:
+            if isinstance(example, NonActivatingExample):
                 # Use zeros for non-activating examples
-                example.normalized_activations = torch.zeros_like(example.activations)
+                activations = torch.zeros_like(example.activations).tolist()
+            else:
+                assert example.normalized_activations is not None
+                activations = example.normalized_activations.tolist()
 
             result.append(
                 ActivationRecord(
                     self.tokenizer.batch_decode(example.tokens),
-                    example.normalized_activations.half(),
+                    activations,
                     quantile=(
                         example.quantile
                         if isinstance(example, ActivatingExample)
-                        else None
+                        else -1
                     ),
                 )
             )

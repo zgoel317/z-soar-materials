@@ -153,7 +153,7 @@ async def simulate_and_score(
     simulator: NeuronSimulator,
     activation_records: Sequence[ActivationRecord],
     non_activation_records: Sequence[ActivationRecord],
-) -> ScoredSimulation:
+) -> list[ScoredSimulation]:
     """
     Score an explanation of a neuron by how well it predicts activations
     on the given text sequences.
@@ -161,40 +161,46 @@ async def simulate_and_score(
     scored_sequence_simulations = await asyncio.gather(
         *[
             _simulate_and_score_sequence(
-                # TODO do we still want a plus one
                 simulator,
                 activation_record,
                 activation_record.quantile,
             )
-            for activation_record in activation_records  # type: ignore
+            for activation_record in activation_records
         ]
     )
 
     if len(non_activation_records) > 0:
         non_activating_scored_seq_simulations = await asyncio.gather(
             *[
-                _simulate_and_score_sequence(simulator, non_activation_record, -1)  # type: ignore
+                _simulate_and_score_sequence(
+                    simulator, non_activation_record, non_activation_record.quantile
+                )
                 for non_activation_record in non_activation_records
             ]
         )
     else:
         non_activating_scored_seq_simulations = []
 
-    # with open('test.txt', 'w') as f:
-    #     f.write(str(scored_sequence_simulations))
-    # return scored_sequence_simulations
+    values: list[ScoredSimulation] = []
+    simulations_per_distance = {}
+    without_errors: list[ScoredSequenceSimulation] = []
+    for sequence in scored_sequence_simulations:
 
-    values = []
-    all_activated = []
-    for distance, sequence in enumerate(scored_sequence_simulations):
-        without_errors = []
         if len(sequence.simulation.expected_activations) > 0:
+            if sequence.distance not in simulations_per_distance:
+                simulations_per_distance[sequence.distance + 1] = []
+            simulations_per_distance[sequence.distance + 1].append(sequence)
             without_errors.append(sequence)
+    for quantile in simulations_per_distance.keys():
         values.append(
-            aggregate_scored_sequence_simulations(without_errors, distance + 1)
+            aggregate_scored_sequence_simulations(
+                simulations_per_distance[quantile], quantile
+            )
         )
-        all_activated.extend(without_errors)
+
     if len(non_activation_records) > 0:
-        all_data = all_activated + non_activating_scored_seq_simulations
-        values.append(aggregate_scored_sequence_simulations(all_data, 0))
-    return values  # type: ignore
+        for sequence in non_activating_scored_seq_simulations:
+            if len(sequence.simulation.expected_activations) > 0:
+                without_errors.append(sequence)
+        values.append(aggregate_scored_sequence_simulations(without_errors, 0))
+    return values

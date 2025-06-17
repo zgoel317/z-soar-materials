@@ -17,7 +17,7 @@ class ActivationRecord(Serializable):
     activations: list[int | float]
     """Raw activation values for the neuron on each token in the text sequence."""
 
-    quantile: Optional[int] = None
+    quantile: int
 
 
 def _check_slices(
