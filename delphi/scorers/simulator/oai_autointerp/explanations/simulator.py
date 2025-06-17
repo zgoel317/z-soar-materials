@@ -100,6 +100,7 @@ def compute_expected_value(
     )
 
 
+# TODO: these types are not correct
 def parse_top_logprobs(top_logprobs: dict[str, float]) -> OrderedDict[int, float]:
     """
     Given a map from tokens to logprobs, return a map from distribution values

@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Sequence
 
 import torch
 
@@ -42,9 +42,9 @@ class OpenAISimulator(Scorer):
             record.explanation,
         )
 
-        valid_activation_records = self.to_activation_records(record.test)  # type: ignore
+        valid_activation_records = self.to_activation_records(record.test)
         if len(record.not_active) > 0:
-            non_activation_records = self.to_activation_records(record.not_active)  # type: ignore
+            non_activation_records = self.to_activation_records(record.not_active)
         else:
             non_activation_records = []
 
@@ -58,7 +58,7 @@ class OpenAISimulator(Scorer):
         )
 
     def to_activation_records(
-        self, examples: list[Union[ActivatingExample, NonActivatingExample]]
+        self, examples: Sequence[ActivatingExample | NonActivatingExample]
     ) -> list[ActivationRecord]:
         # Filter Nones
         result = []
@@ -68,10 +68,10 @@ class OpenAISimulator(Scorer):
 
             if isinstance(example, NonActivatingExample):
                 # Use zeros for non-activating examples
-                activations = torch.zeros_like(example.activations).tolist()
+                activations: list[int] = torch.zeros_like(example.activations).tolist()
             else:
                 assert example.normalized_activations is not None
-                activations = example.normalized_activations.tolist()
+                activations: list[int] = example.normalized_activations.tolist()
 
             result.append(
                 ActivationRecord(

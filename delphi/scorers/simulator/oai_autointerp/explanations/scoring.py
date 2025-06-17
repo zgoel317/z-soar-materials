@@ -79,7 +79,7 @@ async def _simulate_and_score_sequence(
     scored_sequence_simulation = ScoredSequenceSimulation(
         distance=quantile,
         simulation=simulation,
-        true_activations=activations.activations.tolist(),  # type: ignore
+        true_activations=activations.activations,
         ev_correlation_score=score_from_simulation(
             activations, simulation, correlation_score
         ),
@@ -96,19 +96,18 @@ def fix_nan(val):
         return float(val)
 
 
-def default(scored_simulation):
+def default(scored_simulation: ScoredSequenceSimulation) -> ScoredSequenceSimulation:
     ev_correlation_score = scored_simulation.ev_correlation_score
 
     ev_correlation_score = fix_nan(ev_correlation_score)
 
-    return {
-        "tokens": scored_simulation.simulation.tokens,
-        "true_activations": scored_simulation.true_activations,
-        "predicted_activations": scored_simulation.simulation.expected_activations,
-        "ev_correlation_score": ev_correlation_score,
-        "rsquared_score": scored_simulation.rsquared_score,
-        "absolute_dev_explained_score": scored_simulation.absolute_dev_explained_score,
-    }
+    return ScoredSequenceSimulation(
+        distance=scored_simulation.distance,
+        simulation=scored_simulation.simulation,
+        true_activations=scored_simulation.true_activations,
+        ev_correlation_score=ev_correlation_score,
+        rsquared_score=scored_simulation.rsquared_score,
+    )
 
 
 def aggregate_scored_sequence_simulations(
@@ -136,14 +135,14 @@ def aggregate_scored_sequence_simulations(
     rsquared_score = 0
     absolute_dev_explained_score = 0
 
-    scored_sequence_simulations = [default(s) for s in scored_sequence_simulations]  # type: ignore
+    scored_sequence_simulations = [default(s) for s in scored_sequence_simulations]
 
     ev_correlation_score = fix_nan(ev_correlation_score)
 
     return ScoredSimulation(
         distance=distance,
         scored_sequence_simulations=scored_sequence_simulations,
-        ev_correlation_score=ev_correlation_score,  # type: ignore
+        ev_correlation_score=ev_correlation_score,
         rsquared_score=float(rsquared_score),
         absolute_dev_explained_score=float(absolute_dev_explained_score),
     )
@@ -187,7 +186,7 @@ async def simulate_and_score(
     for sequence in scored_sequence_simulations:
 
         if len(sequence.simulation.expected_activations) > 0:
-            if sequence.distance not in simulations_per_distance:
+            if sequence.distance + 1 not in simulations_per_distance:
                 simulations_per_distance[sequence.distance + 1] = []
             simulations_per_distance[sequence.distance + 1].append(sequence)
             without_errors.append(sequence)

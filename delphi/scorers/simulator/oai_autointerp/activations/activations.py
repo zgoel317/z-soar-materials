@@ -14,7 +14,7 @@ class ActivationRecord(Serializable):
     tokens: list[str]
     """Tokens in the text sequence, represented as strings."""
 
-    activations: list[int | float]
+    activations: list[int]
     """Raw activation values for the neuron on each token in the text sequence."""
 
     quantile: int
