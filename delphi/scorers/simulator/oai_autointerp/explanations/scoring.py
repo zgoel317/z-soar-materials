@@ -188,9 +188,8 @@ async def simulate_and_score(
     all_activated = []
     for distance, sequence in enumerate(scored_sequence_simulations):
         without_errors = []
-        for s in sequence:
-            if len(s.simulation.expected_activations) > 0:
-                without_errors.append(s)
+        if len(sequence.simulation.expected_activations) > 0:
+            without_errors.append(sequence)
         values.append(
             aggregate_scored_sequence_simulations(without_errors, distance + 1)
         )
