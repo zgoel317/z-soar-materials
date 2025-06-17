@@ -1,6 +1,28 @@
 # CHANGELOG
 
 
+## v0.1.0 (2025-06-17)
+
+### Features
+
+- Replaces print with logging ([#136](https://github.com/EleutherAI/delphi/pull/136),
+  [`431d654`](https://github.com/EleutherAI/delphi/commit/431d6546c3a3a4ede107d5d4ebe0ffd75e5c923b))
+
+* feat: replaces print with logging
+
+* Change some infos to warnings in constructor
+
+* [pre-commit.ci] auto fixes from pre-commit.com hooks
+
+for more information, see https://pre-commit.ci
+
+---------
+
+Co-authored-by: Goncalo Paulo <30472805+SrGonao@users.noreply.github.com>
+
+Co-authored-by: pre-commit-ci[bot] <66853113+pre-commit-ci[bot]@users.noreply.github.com>
+
+
 ## v0.0.2 (2025-06-02)
 
 ### Bug Fixes
