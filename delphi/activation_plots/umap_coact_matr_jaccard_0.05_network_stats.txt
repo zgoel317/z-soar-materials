@@ -1,0 +1,12 @@
+Network Graph Statistics
+========================
+Matrix type: jaccard
+Edge threshold: 0.05
+Number of nodes: 1000
+Number of edges: 4868
+Average degree: 9.74
+Average clustering coefficient: 0.5797
+Graph is connected: No
+Number of connected components: 48
+Component sizes: [809, 14, 14, 13, 13, 12, 11, 10, 9, 8]
+Density: 0.009746
