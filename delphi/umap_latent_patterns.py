@@ -23,6 +23,7 @@ from typing import Optional
 import hdbscan
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import seaborn as sns
 import torch
 import umap
@@ -1115,6 +1116,184 @@ def create_network_graph(matrix: np.ndarray,
     print(f"Network statistics saved to {stats_file}")
 
 
+def plot_edge_distribution_by_latent(matrix: np.ndarray, 
+                                   output_dir: Path, 
+                                   prefix: str = "latent_network",
+                                   edge_threshold: float = 0.0,
+                                   matrix_type: str = "coactivation") -> None:
+    """
+    Create a plot showing the distribution of edges (degree) with respect to latent indices.
+    
+    Args:
+        matrix: The matrix to create the graph from (coactivation or Jaccard)
+        output_dir: Directory to save the plot
+        prefix: Prefix for output filenames
+        edge_threshold: Threshold for including edges (0.0 = include all non-zero edges)
+        matrix_type: Type of matrix ("coactivation" or "jaccard")
+    """
+    print(f"Creating edge distribution plot from {matrix_type} matrix...")
+    
+    # Convert to numpy if it's a torch tensor
+    if torch.is_tensor(matrix):
+        matrix = matrix.cpu().numpy()
+    
+    # Remove diagonal (self-connections)
+    matrix_no_self = matrix.copy()
+    np.fill_diagonal(matrix_no_self, 0.0)
+    
+    # Apply edge threshold
+    if edge_threshold > 0.0:
+        print(f"Applying edge threshold: {edge_threshold}")
+        matrix_no_self[matrix_no_self < edge_threshold] = 0.0
+    
+    # Count edges for each latent (sum of non-zero entries in each row)
+    edge_counts = np.sum(matrix_no_self > 0.0, axis=1)
+    
+    print(f"Edge distribution statistics:")
+    print(f"  Total latents: {len(edge_counts):,}")
+    print(f"  Latents with edges: {np.sum(edge_counts > 0):,}")
+    print(f"  Latents without edges: {np.sum(edge_counts == 0):,}")
+    print(f"  Min edges per latent: {edge_counts.min()}")
+    print(f"  Max edges per latent: {edge_counts.max()}")
+    print(f"  Mean edges per latent: {edge_counts.mean():.2f}")
+    print(f"  Median edges per latent: {np.median(edge_counts):.2f}")
+    
+    # Create the plot
+    plt.figure(figsize=(16, 10))
+    
+    # Create subplots
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12))
+    
+    # Plot 1: Edge count vs Latent index (scatter plot)
+    latent_indices = np.arange(len(edge_counts))
+    ax1.scatter(latent_indices, edge_counts, alpha=0.6, s=20, color='blue')
+    ax1.set_xlabel('Latent Index')
+    ax1.set_ylabel('Number of Edges (Degree)')
+    ax1.set_title(f'Edge Distribution by Latent Index\n{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}')
+    ax1.grid(True, alpha=0.3)
+    
+    # Add trend line
+    if np.sum(edge_counts > 0) > 1:
+        # Only fit trend line if there are edges
+        z = np.polyfit(latent_indices[edge_counts > 0], edge_counts[edge_counts > 0], 1)
+        p = np.poly1d(z)
+        ax1.plot(latent_indices, p(latent_indices), "r--", alpha=0.8, linewidth=2, 
+                label=f'Trend line (slope: {z[0]:.4f})')
+        ax1.legend()
+    
+    # Plot 2: Histogram of edge counts
+    ax2.hist(edge_counts, bins=min(50, len(set(edge_counts))), alpha=0.7, color='green', edgecolor='black')
+    ax2.set_xlabel('Number of Edges (Degree)')
+    ax2.set_ylabel('Frequency (Number of Latents)')
+    ax2.set_title(f'Distribution of Edge Counts\n{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}')
+    ax2.grid(True, alpha=0.3)
+    
+    # Add vertical line for mean
+    mean_edges = edge_counts.mean()
+    ax2.axvline(mean_edges, color='red', linestyle='--', linewidth=2, 
+                label=f'Mean: {mean_edges:.2f}')
+    ax2.legend()
+    
+    plt.tight_layout()
+    
+    # Save the plot
+    output_file = output_dir / f"{prefix}_edge_distribution.png"
+    plt.savefig(output_file, dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    print(f"Edge distribution plot saved to {output_file}")
+    
+    # Create interactive Plotly version
+    print("Creating interactive HTML edge distribution plot...")
+    
+    # Create interactive scatter plot
+    fig_scatter = go.Figure()
+    
+    # Add scatter trace
+    fig_scatter.add_trace(go.Scatter(
+        x=latent_indices,
+        y=edge_counts,
+        mode='markers',
+        marker=dict(
+            size=6,
+            color=edge_counts,
+            colorscale='Viridis',
+            showscale=True,
+            colorbar=dict(title="Number of Edges", x=1.1)
+        ),
+        text=[f'Latent Index: {i}<br>Edges: {count}' for i, count in zip(latent_indices, edge_counts)],
+        hoverinfo='text',
+        name='Latent Nodes'
+    ))
+    
+    # Add trend line if there are edges
+    if np.sum(edge_counts > 0) > 1:
+        z = np.polyfit(latent_indices[edge_counts > 0], edge_counts[edge_counts > 0], 1)
+        p = np.poly1d(z)
+        fig_scatter.add_trace(go.Scatter(
+            x=latent_indices,
+            y=p(latent_indices),
+            mode='lines',
+            line=dict(dash='dash', color='red', width=3),
+            name=f'Trend Line (slope: {z[0]:.4f})'
+        ))
+    
+    fig_scatter.update_layout(
+        title=f'Edge Distribution by Latent Index<br>{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}',
+        xaxis_title='Latent Index',
+        yaxis_title='Number of Edges (Degree)',
+        hovermode='closest',
+        plot_bgcolor='white'
+    )
+    
+    # Save interactive scatter plot
+    html_scatter_file = output_dir / f"{prefix}_edge_distribution_scatter.html"
+    fig_scatter.write_html(html_scatter_file)
+    print(f"Interactive scatter plot saved to {html_scatter_file}")
+    
+    # Create interactive histogram
+    fig_hist = go.Figure()
+    
+    fig_hist.add_trace(go.Histogram(
+        x=edge_counts,
+        nbinsx=min(50, len(set(edge_counts))),
+        marker_color='green',
+        opacity=0.7,
+        name='Edge Count Distribution'
+    ))
+    
+    # Add vertical line for mean
+    fig_hist.add_vline(
+        x=mean_edges, 
+        line_dash="dash", 
+        line_color="red",
+        annotation_text=f"Mean: {mean_edges:.2f}",
+        annotation_position="top right"
+    )
+    
+    fig_hist.update_layout(
+        title=f'Distribution of Edge Counts<br>{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}',
+        xaxis_title='Number of Edges (Degree)',
+        yaxis_title='Frequency (Number of Latents)',
+        plot_bgcolor='white'
+    )
+    
+    # Save interactive histogram
+    html_hist_file = output_dir / f"{prefix}_edge_distribution_histogram.html"
+    fig_hist.write_html(html_hist_file)
+    print(f"Interactive histogram saved to {html_hist_file}")
+    
+    # Save edge count data as CSV for further analysis
+    csv_file = output_dir / f"{prefix}_edge_counts.csv"
+    import pandas as pd
+    df = pd.DataFrame({
+        'latent_index': latent_indices,
+        'edge_count': edge_counts
+    })
+    df.to_csv(csv_file, index=False)
+    print(f"Edge count data saved to {csv_file}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Apply UMAP to latent activation patterns")
     parser.add_argument("--cache_dir", type=str, required=True,
@@ -1159,6 +1338,8 @@ def main():
                        help="Jaccard similarity threshold for filtering latents and network graph edges (0.0 = no filtering)")
     parser.add_argument("--create_network_graph", action="store_true",
                        help="Create a network graph visualization using NetworkX")
+    parser.add_argument("--create_edge_distribution", action="store_true",
+                       help="Create a plot showing edge distribution by latent index")
     
     args = parser.parse_args()
     
@@ -1399,6 +1580,27 @@ def main():
             args.jaccard_threshold,
             "jaccard"
         )
+        
+        # Also create edge distribution plot
+        print("\nCreating edge distribution plot...")
+        plot_edge_distribution_by_latent(
+            jaccard_matrix,
+            output_dir,
+            args.html_prefix,
+            args.jaccard_threshold,
+            "jaccard"
+        )
+    
+    # Create edge distribution plot if requested (even without full network graph)
+    if args.create_edge_distribution and not args.create_network_graph:
+        print("\nCreating edge distribution plot from coactivation matrix...")
+        plot_edge_distribution_by_latent(
+            coactivation_matrix,
+            output_dir,
+            args.html_prefix,
+            0.0,  # No edge threshold for coactivation matrix
+            "coactivation"
+        )
     
     print("\nSummary:")
     print(f"  - Total latents: {coactivation_matrix.shape[0]:,}")
@@ -1408,6 +1610,12 @@ def main():
         print(f"  - Jaccard threshold applied: {args.jaccard_threshold} (connections <= threshold zeroed out)")
     print(f"  - Number of clusters: {len(set(cluster_labels)) - (1 if -1 in cluster_labels else 0)}")
     print(f"  - Noise points: {list(cluster_labels).count(-1)}")
+    
+    # Add edge distribution summary if network graph or edge distribution was created
+    if args.create_network_graph or args.create_edge_distribution:
+        print(f"  - Edge distribution analysis: Enabled")
+        if args.jaccard_threshold > 0.0:
+            print(f"  - Jaccard threshold for edges: {args.jaccard_threshold}")
 
 
 if __name__ == "__main__":
