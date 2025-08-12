@@ -1526,14 +1526,21 @@ def plot_edge_distribution_by_latent(matrix: np.ndarray,
     # Count edges for each latent (sum of non-zero entries in each row)
     edge_counts = np.sum(matrix_no_self > 0.0, axis=1)
     
-    print(f"Edge distribution statistics:")
+    # Determine what we're counting based on matrix type
+    if matrix_type == "coactivation" or matrix_type == "coactivation_original":
+        edge_description = "co-activations"
+        print(f"Co-activation distribution statistics:")
+    else:
+        edge_description = "edges"
+        print(f"Edge distribution statistics:")
+    
     print(f"  Total latents: {len(edge_counts):,}")
-    print(f"  Latents with edges: {np.sum(edge_counts > 0):,}")
-    print(f"  Latents without edges: {np.sum(edge_counts == 0):,}")
-    print(f"  Min edges per latent: {edge_counts.min()}")
-    print(f"  Max edges per latent: {edge_counts.max()}")
-    print(f"  Mean edges per latent: {edge_counts.mean():.2f}")
-    print(f"  Median edges per latent: {np.median(edge_counts):.2f}")
+    print(f"  Latents with {edge_description}: {np.sum(edge_counts > 0):,}")
+    print(f"  Latents without {edge_description}: {np.sum(edge_counts == 0):,}")
+    print(f"  Min {edge_description} per latent: {edge_counts.min()}")
+    print(f"  Max {edge_description} per latent: {edge_counts.max()}")
+    print(f"  Mean {edge_description} per latent: {edge_counts.mean():.2f}")
+    print(f"  Median {edge_description} per latent: {np.median(edge_counts):.2f}")
     
     # Create the plot
     plt.figure(figsize=(16, 10))
@@ -1545,8 +1552,24 @@ def plot_edge_distribution_by_latent(matrix: np.ndarray,
     latent_indices = np.arange(len(edge_counts))
     ax1.scatter(latent_indices, edge_counts, alpha=0.6, s=20, color='blue')
     ax1.set_xlabel('Latent Index')
-    ax1.set_ylabel('Number of Edges (Degree)')
-    ax1.set_title(f'Edge Distribution by Latent Index\n{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}')
+    # Set y-axis label based on matrix type
+    if matrix_type == "coactivation" or matrix_type == "coactivation_original":
+        ax1.set_ylabel('Number of Co-activations (Degree)')
+    else:
+        ax1.set_ylabel('Number of Edges (Degree)')
+    # Make title clearer about what's being shown
+    if matrix_type == "coactivation" or matrix_type == "coactivation_original":
+        if edge_threshold > 0.0:
+            title = f'Co-activation Distribution by Latent Index\n{matrix_type.capitalize()} Matrix, Threshold: {edge_threshold}'
+        else:
+            title = f'Co-activation Distribution by Latent Index\n{matrix_type.capitalize()} Matrix - ALL Co-activations (No Threshold)'
+    else:
+        if edge_threshold > 0.0:
+            title = f'Edge Distribution by Latent Index\n{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}'
+        else:
+            title = f'Edge Distribution by Latent Index\n{matrix_type.capitalize()} Matrix - ALL Edges (No Threshold)'
+    
+    ax1.set_title(title)
     ax1.grid(True, alpha=0.3)
     
     # Add trend line
@@ -1560,9 +1583,25 @@ def plot_edge_distribution_by_latent(matrix: np.ndarray,
     
     # Plot 2: Histogram of edge counts
     ax2.hist(edge_counts, bins=min(50, len(set(edge_counts))), alpha=0.7, color='green', edgecolor='black')
-    ax2.set_xlabel('Number of Edges (Degree)')
+    # Set x-axis label based on matrix type
+    if matrix_type == "coactivation" or matrix_type == "coactivation_original":
+        ax2.set_xlabel('Number of Co-activations (Degree)')
+    else:
+        ax2.set_xlabel('Number of Edges (Degree)')
     ax2.set_ylabel('Frequency (Number of Latents)')
-    ax2.set_title(f'Distribution of Edge Counts\n{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}')
+    # Make histogram title clearer
+    if matrix_type == "coactivation" or matrix_type == "coactivation_original":
+        if edge_threshold > 0.0:
+            hist_title = f'Distribution of Co-activation Counts\n{matrix_type.capitalize()} Matrix, Threshold: {edge_threshold}'
+        else:
+            hist_title = f'Distribution of Co-activation Counts\n{matrix_type.capitalize()} Matrix - ALL Co-activations (No Threshold)'
+    else:
+        if edge_threshold > 0.0:
+            hist_title = f'Distribution of Edge Counts\n{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}'
+        else:
+            hist_title = f'Distribution of Edge Counts\n{matrix_type.capitalize()} Matrix - ALL Edges (No Threshold)'
+    
+    ax2.set_title(hist_title)
     ax2.grid(True, alpha=0.3)
     
     # Add vertical line for mean
@@ -1596,9 +1635,9 @@ def plot_edge_distribution_by_latent(matrix: np.ndarray,
             color=edge_counts,
             colorscale='Viridis',
             showscale=True,
-            colorbar=dict(title="Number of Edges", x=1.1)
+            colorbar=dict(title=f"Number of {edge_description.title()}", x=1.1)
         ),
-        text=[f'Latent Index: {i}<br>Edges: {count}' for i, count in zip(latent_indices, edge_counts)],
+        text=[f'Latent Index: {i}<br>{edge_description.title()}: {count}' for i, count in zip(latent_indices, edge_counts)],
         hoverinfo='text',
         name='Latent Nodes'
     ))
@@ -1615,10 +1654,26 @@ def plot_edge_distribution_by_latent(matrix: np.ndarray,
             name=f'Trend Line (slope: {z[0]:.4f})'
         ))
     
+    # Set title and labels based on matrix type
+    if matrix_type == "coactivation" or matrix_type == "coactivation_original":
+        if edge_threshold > 0.0:
+            scatter_title = f'Co-activation Distribution by Latent Index<br>{matrix_type.capitalize()} Matrix, Threshold: {edge_threshold}'
+            y_axis_title = 'Number of Co-activations (Degree)'
+        else:
+            scatter_title = f'Co-activation Distribution by Latent Index<br>{matrix_type.capitalize()} Matrix - ALL Co-activations (No Threshold)'
+            y_axis_title = 'Number of Co-activations (Degree)'
+    else:
+        if edge_threshold > 0.0:
+            scatter_title = f'Edge Distribution by Latent Index<br>{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}'
+            y_axis_title = 'Number of Edges (Degree)'
+        else:
+            scatter_title = f'Edge Distribution by Latent Index<br>{matrix_type.capitalize()} Matrix - ALL Edges (No Threshold)'
+            y_axis_title = 'Number of Edges (Degree)'
+    
     fig_scatter.update_layout(
-        title=f'Edge Distribution by Latent Index<br>{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}',
+        title=scatter_title,
         xaxis_title='Latent Index',
-        yaxis_title='Number of Edges (Degree)',
+        yaxis_title=y_axis_title,
         hovermode='closest',
         plot_bgcolor='white'
     )
@@ -1648,9 +1703,25 @@ def plot_edge_distribution_by_latent(matrix: np.ndarray,
         annotation_position="top right"
     )
     
+    # Set title and labels based on matrix type
+    if matrix_type == "coactivation" or matrix_type == "coactivation_original":
+        if edge_threshold > 0.0:
+            hist_title_interactive = f'Distribution of Co-activation Counts<br>{matrix_type.capitalize()} Matrix, Threshold: {edge_threshold}'
+            x_axis_title = 'Number of Co-activations (Degree)'
+        else:
+            hist_title_interactive = f'Distribution of Co-activation Counts<br>{matrix_type.capitalize()} Matrix - ALL Co-activations (No Threshold)'
+            x_axis_title = 'Number of Co-activations (Degree)'
+    else:
+        if edge_threshold > 0.0:
+            hist_title_interactive = f'Distribution of Edge Counts<br>{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}'
+            x_axis_title = 'Number of Edges (Degree)'
+        else:
+            hist_title_interactive = f'Distribution of Edge Counts<br>{matrix_type.capitalize()} Matrix - ALL Edges (No Threshold)'
+            x_axis_title = 'Number of Edges (Degree)'
+    
     fig_hist.update_layout(
-        title=f'Distribution of Edge Counts<br>{matrix_type.capitalize()} Matrix, Edge Threshold: {edge_threshold}',
-        xaxis_title='Number of Edges (Degree)',
+        title=hist_title_interactive,
+        xaxis_title=x_axis_title,
         yaxis_title='Frequency (Number of Latents)',
         plot_bgcolor='white'
     )
@@ -1661,14 +1732,21 @@ def plot_edge_distribution_by_latent(matrix: np.ndarray,
     print(f"Interactive histogram saved to {html_hist_file}")
     
     # Save edge count data as CSV for further analysis
-    csv_file = output_dir / f"{prefix}_edge_counts.csv"
+    if matrix_type == "coactivation" or matrix_type == "coactivation_original":
+        csv_file = output_dir / f"{prefix}_coactivation_counts.csv"
+        column_name = 'coactivation_count'
+        print(f"Co-activation count data saved to {csv_file}")
+    else:
+        csv_file = output_dir / f"{prefix}_edge_counts.csv"
+        column_name = 'edge_count'
+        print(f"Edge count data saved to {csv_file}")
+    
     import pandas as pd
     df = pd.DataFrame({
         'latent_index': latent_indices,
-        'edge_count': edge_counts
+        column_name: edge_counts
     })
     df.to_csv(csv_file, index=False)
-    print(f"Edge count data saved to {csv_file}")
 
 
 def main():
@@ -1750,6 +1828,21 @@ def main():
         matrix_path = output_dir / "coactivation_matrix.pt"
         torch.save(coactivation_matrix, matrix_path)
         print(f"Coactivation matrix saved to {matrix_path}")
+    
+    # Create edge distribution plot from coactivation matrix BEFORE any filtering
+    if args.create_edge_distribution or args.create_network_graph:
+        print("\nCreating edge distribution plot from coactivation matrix BEFORE any filtering...")
+        print("  - This shows the true distribution of coactivations BEFORE any UMAP or filtering")
+        print("  - X-axis: Latent Index (0 to {coactivation_matrix.shape[0]-1:,})")
+        print("  - Y-axis: Number of co-activations per latent")
+        print("  - Shows how many times each latent co-activates with other latents")
+        plot_edge_distribution_by_latent(
+            coactivation_matrix,
+            output_dir,
+            args.html_prefix,
+            0.0,  # No edge threshold for coactivation matrix
+            "coactivation_original"
+        )
     
     # Check if UMAP embeddings are cached
     umap_cache_file = cache_dir_intermediate / "umap_embeddings.pt"
@@ -1976,6 +2069,12 @@ def main():
         else:
             print("Network graph Jaccard matrix has no non-zero values (only diagonal)")
         
+        # Note: Edge distribution plot already created from coactivation matrix BEFORE any filtering
+        print(f"\nEdge distribution plot already created from coactivation matrix BEFORE any filtering")
+        print("  - This shows the true distribution BEFORE any UMAP or filtering")
+        print("  - X-axis: Latent Index (0 to {coactivation_np.shape[0]-1:,})")
+        print("  - Y-axis: Number of co-activations per latent")
+        
         # Find largest component using top decile edges if requested
         if args.auto_connectivity_threshold:
             print("\nFinding largest connected component using top decile edges...")
@@ -2058,19 +2157,9 @@ def main():
             below_threshold_mask = jaccard_matrix_no_self <= args.jaccard_threshold
             jaccard_matrix[below_threshold_mask] = 0.0
         
-        # Create edge distribution plot from component matrix
-        if args.auto_connectivity_threshold:
-            print(f"\nCreating edge distribution plot from largest component matrix ({len(component_nodes)} nodes)...")
-        else:
-            print(f"\nCreating edge distribution plot from FULL matrix ({len(component_nodes)} nodes)...")
-        
-        plot_edge_distribution_by_latent(
-            jaccard_matrix,
-            output_dir,
-            args.html_prefix,
-            args.jaccard_threshold,
-            "jaccard"
-        )
+        # Note: Edge distribution plot already created from coactivation matrix BEFORE any filtering
+        print(f"\nEdge distribution plot already created from coactivation matrix BEFORE any filtering")
+        print("  - This shows the true distribution BEFORE any Jaccard computation or filtering")
         
         # Create network graph from component matrix
         if args.auto_connectivity_threshold:
@@ -2089,16 +2178,10 @@ def main():
             args.max_nodes
         )
     
-    # Create edge distribution plot if requested (even without full network graph)
+    # Note: Edge distribution plot already created from coactivation matrix BEFORE any filtering
     if args.create_edge_distribution and not args.create_network_graph:
-        print("\nCreating edge distribution plot from coactivation matrix...")
-        plot_edge_distribution_by_latent(
-            coactivation_matrix,
-            output_dir,
-            args.html_prefix,
-            0.0,  # No edge threshold for coactivation matrix
-            "coactivation"
-        )
+        print("\nEdge distribution plot already created from coactivation matrix BEFORE any filtering")
+        print("  - This shows the true distribution BEFORE any UMAP or filtering")
     
     print("\nSummary:")
     print(f"  - Total latents: {coactivation_matrix.shape[0]:,}")
@@ -2112,6 +2195,10 @@ def main():
     # Add edge distribution summary if network graph or edge distribution was created
     if args.create_network_graph or args.create_edge_distribution:
         print(f"  - Edge distribution analysis: Enabled")
+        print(f"  - Created edge distribution plot from coactivation matrix BEFORE any filtering")
+        print(f"    - Shows true distribution BEFORE any UMAP or filtering")
+        print(f"    - X-axis: Latent Index (0 to {coactivation_matrix.shape[0]-1:,})")
+        print(f"    - Y-axis: Number of co-activations per latent")
         if args.jaccard_threshold > 0.0:
             print(f"  - Jaccard threshold for edges: {args.jaccard_threshold}")
 
